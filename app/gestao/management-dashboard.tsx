@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BarChart3, Boxes, Building2, Calculator, CircleDollarSign, ClipboardList, Factory, Gavel, Home, LogOut, Plus, Scissors, Search, Users } from "lucide-react";
+import { BarChart3, Boxes, Building2, Calculator, CircleDollarSign, ClipboardList, Factory, Gavel, Home, LogOut, Plus, Scissors, Search, UserCog, Users } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import { TenderItemsPanel } from "./tender-items-panel";
 import { ReportsPanel } from "./reports-panel";
 import { CompanySettingsPanel } from "./company-settings-panel";
 import { CutPlanPanel } from "./cut-plan-panel";
+import { TeamPanel } from "./team-panel";
 import type { CutPlanQuotePrefill } from "@/lib/cut-plan-quote";
 
 const menu = [
@@ -28,10 +29,13 @@ const menu = [
   ["clientes", Users, "Clientes"],
   ["financeiro", CircleDollarSign, "Financeiro"],
   ["relatorios", BarChart3, "Relatórios"],
+  ["equipe", UserCog, "Equipe"],
   ["empresa", Building2, "Minha empresa"],
 ] as const;
 
-export function ManagementDashboard({ userName, initialSection = "visao-geral" }: { userName: string; initialSection?: string }) {
+type OrganizationOption = { id: string; trade_name: string };
+
+export function ManagementDashboard({ userName, initialSection = "visao-geral", activeOrganizationId, activeRole, organizations }: { userName: string; initialSection?: string; activeOrganizationId: string; activeRole: string; organizations: OrganizationOption[] }) {
   const [section, setSection] = useState(initialSection);
   const [search, setSearch] = useState("");
   const [quoteComposer, setQuoteComposer] = useState(0);
@@ -39,6 +43,15 @@ export function ManagementDashboard({ userName, initialSection = "visao-geral" }
   const [quotePrefill, setQuotePrefill] = useState<CutPlanQuotePrefill | null>(null);
   const [pricingComposer, setPricingComposer] = useState(0);
   const [financeSection, setFinanceSection] = useState<"payables" | "receivables" | "commissions" | "suppliers" | "break-even">("payables");
+  const [switchingOrganization, setSwitchingOrganization] = useState(false);
+
+  async function switchOrganization(organizationId: string) {
+    if (organizationId === activeOrganizationId) return;
+    setSwitchingOrganization(true);
+    const response = await fetch("/api/organizations", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId }) });
+    if (!response.ok) { setSwitchingOrganization(false); return; }
+    window.location.replace("/gestao");
+  }
 
   function navigate(target: string) {
     setQuoteComposer(0);
@@ -52,10 +65,10 @@ export function ManagementDashboard({ userName, initialSection = "visao-geral" }
 
   return <SidebarProvider><Sidebar className="management-sidebar" collapsible="icon">
     <SidebarHeader><Link href="/" className="dash-brand nexofab-wordmark" aria-label="NexoFab"><span>Nexo</span>Fab</Link></SidebarHeader>
-    <SidebarContent><SidebarGroup><SidebarGroupLabel>GESTÃO</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{menu.map(([key, Icon, label]) => <SidebarMenuItem key={label}><SidebarMenuButton isActive={section === key} tooltip={label} onClick={() => { setQuoteComposer(0); if (key === "financeiro") setFinanceSection("payables"); setSection(key); }}><Icon/><span>{label}</span></SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent>
+    <SidebarContent><SidebarGroup><SidebarGroupLabel>GESTÃO</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{menu.filter(([key]) => key !== "equipe" || ["owner", "admin"].includes(activeRole)).map(([key, Icon, label]) => <SidebarMenuItem key={label}><SidebarMenuButton isActive={section === key} tooltip={label} onClick={() => { setQuoteComposer(0); if (key === "financeiro") setFinanceSection("payables"); setSection(key); }}><Icon/><span>{label}</span></SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent>
     <SidebarFooter><SidebarMenu><SidebarMenuItem><form action="/auth/signout" method="post"><SidebarMenuButton type="submit"><LogOut/><span>Sair</span></SidebarMenuButton></form></SidebarMenuItem></SidebarMenu></SidebarFooter>
   </Sidebar><SidebarInset className="dash-shell">
-    <header className="dash-header"><SidebarTrigger/><div className="dash-search"><Search/><Input aria-label="Buscar nesta área" placeholder="Buscar nesta área..." value={search} onChange={(event) => setSearch(event.target.value)}/></div><Button className="dash-new-quote" onClick={() => { setQuoteOpenRequest(null); setQuotePrefill(null); setSection("orcamentos"); setQuoteComposer((value) => value + 1); }}><Plus/>Novo orçamento</Button><NotificationCenter onOpenQuotes={(quoteId) => { setQuoteComposer(0); setQuotePrefill(null); if (quoteId) setQuoteOpenRequest({ id: quoteId, request: Date.now() }); setSection("orcamentos"); }} onOpenProduction={() => { setQuoteComposer(0); setSection("producao"); }}/><div className="user-chip"><span>{userName.slice(0, 1).toUpperCase()}</span><div><b>{userName.split("@")[0]}</b><small>Administrador</small></div></div></header>
+    <header className="dash-header"><SidebarTrigger/><label className="organization-switcher"><Building2/><select aria-label="Empresa ativa" value={activeOrganizationId} disabled={switchingOrganization} onChange={(event) => void switchOrganization(event.target.value)}>{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.trade_name}</option>)}</select></label><div className="dash-search"><Search/><Input aria-label="Buscar nesta área" placeholder="Buscar nesta área..." value={search} onChange={(event) => setSearch(event.target.value)}/></div><Button className="dash-new-quote" onClick={() => { setQuoteOpenRequest(null); setQuotePrefill(null); setSection("orcamentos"); setQuoteComposer((value) => value + 1); }}><Plus/>Novo orçamento</Button><NotificationCenter onOpenQuotes={(quoteId) => { setQuoteComposer(0); setQuotePrefill(null); if (quoteId) setQuoteOpenRequest({ id: quoteId, request: Date.now() }); setSection("orcamentos"); }} onOpenProduction={() => { setQuoteComposer(0); setSection("producao"); }}/><div className="user-chip"><span>{userName.slice(0, 1).toUpperCase()}</span><div><b>{userName.split("@")[0]}</b><small>{activeRole === "owner" ? "Proprietário" : activeRole}</small></div></div></header>
     <main className="dash-main">
       {section === "visao-geral" && <OverviewPanel onNavigate={navigate}/>}
       {section === "orcamentos" && <QuotesPanel
@@ -80,6 +93,7 @@ export function ManagementDashboard({ userName, initialSection = "visao-geral" }
       {section === "clientes" && <CustomersPanel search={search}/>}
       {section === "financeiro" && <FinancePanel key={financeSection} search={search} requestedSection={financeSection}/>}
       {section === "relatorios" && <ReportsPanel/>}
+      {section === "equipe" && ["owner", "admin"].includes(activeRole) && <TeamPanel/>}
       {section === "empresa" && <CompanySettingsPanel/>}
     </main>
   </SidebarInset></SidebarProvider>;

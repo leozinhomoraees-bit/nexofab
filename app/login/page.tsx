@@ -31,7 +31,9 @@ export default function LoginPage() {
       return;
     }
 
-    window.location.replace("/gestao");
+    const requestedPath = new URLSearchParams(window.location.search).get("next");
+    const nextPath = requestedPath?.startsWith("/") && !requestedPath.startsWith("//") ? requestedPath : "/gestao";
+    window.location.replace(nextPath);
   }
 
   return (

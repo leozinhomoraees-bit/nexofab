@@ -19,7 +19,7 @@ const quoteItemSchema = z.object({
   pricingSource: z.enum(["manual", "calculado"]).optional().default("manual"),
   suggestedUnitPrice: z.coerce.number().min(0).max(99999999).nullable().optional().default(null),
   wastePercent: z.coerce.number().min(0).max(100).nullable().optional().default(null),
-  pricingSnapshot: z.record(z.unknown()).nullable().optional().default(null),
+  pricingSnapshot: z.record(z.string(), z.unknown()).nullable().optional().default(null),
   productId: z.union([z.string().uuid(), z.literal("")]).optional().default(""),
   optionGroup: optionalText(120),
 });
@@ -37,7 +37,7 @@ function quoteValidationMessage(error: z.ZodError) {
       : validationLabels[String(root)] ?? String(root || "dados do orçamento");
     if (issue.code === "too_big") return `${location} ultrapassa o limite permitido (${issue.maximum})`;
     if (issue.code === "too_small") return `${location} está vazio ou abaixo do mínimo permitido`;
-    if (issue.code === "invalid_string") return `${location} está em formato inválido`;
+    if (issue.code === "invalid_format") return `${location} está em formato inválido`;
     if (issue.code === "invalid_type") return `${location} possui um valor inválido`;
     return `${location}: ${issue.message}`;
   });

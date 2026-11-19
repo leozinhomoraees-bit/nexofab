@@ -15,8 +15,19 @@ SaaS multiempresa para orçamentos, precificação, produção, estoque e financ
 2. Copie `.env.example` para `.env.local` e informe somente a URL e a chave pública do projeto novo.
 3. Aplique todas as migrations, em ordem, no banco vazio.
 4. Crie um usuário em **Authentication > Users**.
-5. Autenticado como esse usuário, chame `public.create_organization('Minha empresa')` por um cliente que preserve a sessão, ou implemente a tela de onboarding antes do piloto.
-6. Rode `npm ci` e `npm run dev`.
+5. Entre em `/login`; o onboarding cria a primeira empresa e define o tenant ativo.
+6. Em **Gestão > Equipe**, gere convites para os demais usuários. O link é exibido uma única vez e deve ser enviado por um canal confiável.
+7. Rode `npm ci` e `npm run dev`.
+
+## Verificações
+
+```sh
+npm run lint
+npm run build
+supabase test db
+```
+
+O teste SQL deve ser executado apenas em um Supabase local descartável. Ele cria dois tenants dentro de uma transação e confirma que leitura, escrita e troca de empresa não atravessam a fronteira de RLS.
 
 ## Publicação
 
@@ -29,11 +40,12 @@ Conecte este repositório a um projeto Vercel novo. Configure as variáveis de a
 - RLS restringe leitura e escrita ao tenant ativo.
 - Uploads usam o prefixo `<organization_id>/...`.
 - Papéis pertencem ao vínculo usuário–organização.
+- Convites armazenam apenas o hash do token e exigem o mesmo e-mail autenticado.
+- Criação, aceite e revogação de convites passam por RPCs `security definer` restritas ao papel `authenticated`.
 - A chave `service_role` não é necessária para executar a aplicação atual.
 
 ## Antes do primeiro cliente
 
-- Implementar onboarding e convites na interface.
 - Escolher o provedor de cobrança e processar webhooks idempotentes.
-- Criar testes automatizados com dois tenants para RLS, RPCs e Storage.
+- Ampliar os testes locais para cobrir expiração de convites e políticas do Storage.
 - Habilitar o formulário público somente após definir tenant por domínio ou slug e aplicar rate limiting.
