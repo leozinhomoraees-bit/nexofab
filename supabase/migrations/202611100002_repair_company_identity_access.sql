@@ -1,0 +1,2 @@
+-- Consolidado pela migration NexoFab de fundação multiempresa.
+-- Mantido apenas para preservar a ordem cronológica das migrations.

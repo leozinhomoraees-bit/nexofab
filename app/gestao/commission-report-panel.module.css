@@ -1,0 +1,118 @@
+.panel {
+  display: grid;
+  gap: 15px;
+}
+
+.head {
+  padding: 21px 23px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid #dce7e5;
+  border-radius: 12px;
+  background: linear-gradient(110deg, #f1faf8, #fff);
+}
+
+.head > div { display: grid; gap: 4px; }
+.head small { color: #118f84; font-size: 10px; font-weight: 900; letter-spacing: .13em; }
+.head h2 { margin: 0; color: #1f3e44; font-size: 22px; }
+.head p { margin: 0; color: #718489; font-size: 12px; }
+
+.period {
+  padding: 12px 14px;
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  border: 1px solid #dfe8e7;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.presets { margin-right: auto; display: flex; gap: 5px; }
+.presets button { min-height: 36px; padding: 0 12px; border: 1px solid #d9e4e3; border-radius: 7px; background: #f8fbfb; color: #587076; font-size: 11px; font-weight: 800; cursor: pointer; }
+.presets button:hover { border-color: #9fc9c4; background: #f0f8f6; }
+.presets button.active { border-color: #158f84; background: #158f84; color: #fff; }
+.period label { display: grid; gap: 4px; color: #60757a; font-size: 10px; font-weight: 800; }
+.period input { width: 145px; min-height: 36px; }
+
+.message, .recovered, .rule {
+  padding: 12px 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.message { border: 1px solid #efb4ac; background: #fff1ef; color: #8a3f35; }
+.recovered { border: 1px solid #bfe2da; background: #eefaf6; color: #397068; }
+.message svg, .recovered svg, .rule svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.recovered svg, .rule svg { color: #138e82; }
+
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.kpis article { min-height: 118px; padding: 16px; display: grid; align-content: center; gap: 6px; border: 1px solid #dce6e5; border-radius: 10px; background: #fff; box-shadow: 0 8px 24px #15343b08; }
+.kpis article > span { display: flex; align-items: center; gap: 6px; color: #708287; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.kpis svg { width: 15px; height: 15px; color: #139287; }
+.kpis b { color: #1d3d43; font-size: 21px; }
+.kpis small { color: #819095; font-size: 10px; }
+.kpis .commissionKpi { border-color: #f1cfbd; background: linear-gradient(145deg, #fff4ed, #fff); }
+.kpis .commissionKpi svg, .kpis .commissionKpi b { color: #d35718; }
+
+.legacy { overflow: hidden; border: 1px solid #efd5a6; border-radius: 10px; background: #fffdf8; }
+.legacy > header { padding: 12px 14px; display: flex; align-items: flex-start; gap: 9px; background: #fff7e7; color: #765b28; }
+.legacy > header svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.legacy > header span { display: grid; gap: 3px; }
+.legacy > header b { font-size: 12px; }
+.legacy > header small { font-size: 10px; }
+.legacy article { padding: 11px 14px; display: grid; grid-template-columns: minmax(0, 1fr) 125px 125px auto; align-items: end; gap: 10px; border-top: 1px solid #f1e5cb; }
+.legacyItem { display: grid; gap: 3px; min-width: 0; }
+.legacyItem small { color: #9a793e; font-size: 9px; font-weight: 800; }
+.legacyItem b { overflow: hidden; color: #3b4c4f; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.legacyItem em { color: #7e8a8b; font-size: 10px; font-style: normal; }
+.legacy label { display: grid; gap: 4px; color: #62777a; font-size: 10px; font-weight: 800; }
+.legacy input, .legacy button { min-height: 36px; }
+
+.list { display: grid; gap: 8px; }
+.list details { overflow: hidden; border: 1px solid #dce6e5; border-radius: 10px; background: #fff; }
+.list summary { min-height: 75px; padding: 13px 16px; display: grid; grid-template-columns: minmax(0, 1fr) 140px 140px; align-items: center; gap: 16px; cursor: pointer; list-style: none; }
+.list summary::-webkit-details-marker { display: none; }
+.list summary:hover { background: #f8fbfa; }
+.list summary > span { min-width: 0; display: grid; gap: 3px; }
+.list summary small { color: #7a8b8f; font-size: 10px; }
+.list summary b { overflow: hidden; color: #284248; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.list summary em { overflow: hidden; color: #7c8c90; font-size: 10px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.highlight { padding: 9px 11px; border-radius: 7px; background: #fff2e9; }
+.list summary .highlight b { color: #ce561b; }
+.details { padding: 8px 16px 14px; display: grid; gap: 5px; border-top: 1px solid #e7eeee; background: #fafcfc; }
+.details article { padding: 9px 10px; display: grid; grid-template-columns: minmax(0, 1fr) 180px 150px; align-items: center; gap: 12px; border-radius: 7px; background: #fff; }
+.details article > div { display: grid; gap: 3px; }
+.details b { color: #314b50; font-size: 11px; }
+.details small, .details span { color: #7a8b8e; font-size: 10px; }
+.details strong { color: #c9531a; font-size: 11px; text-align: right; }
+
+.empty { min-height: 180px; display: grid; place-items: center; align-content: center; gap: 6px; border: 1px dashed #cbdcda; border-radius: 10px; background: #fbfdfd; color: #708589; text-align: center; }
+.empty svg { color: #119185; }
+.empty b { color: #28464b; font-size: 13px; }
+.empty span { font-size: 10px; }
+
+.rule { border: 1px solid #cfe2df; background: #f3faf8; color: #657c80; }
+.rule b { margin-right: 4px; color: #2b4a50; }
+
+@media (max-width: 1000px) {
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .period { align-items: stretch; flex-wrap: wrap; }
+  .presets { width: 100%; overflow: auto; }
+  .list summary { grid-template-columns: minmax(0, 1fr) 120px 120px; }
+}
+
+@media (max-width: 650px) {
+  .head { align-items: flex-start; flex-direction: column; }
+  .kpis { grid-template-columns: 1fr; }
+  .period label { width: calc(50% - 5px); }
+  .period input { width: 100%; }
+  .list summary { grid-template-columns: 1fr 1fr; }
+  .list summary > span:first-child { grid-column: 1 / -1; }
+  .details article, .legacy article { grid-template-columns: 1fr; }
+  .details strong { text-align: left; }
+}

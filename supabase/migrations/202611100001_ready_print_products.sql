@@ -1,0 +1,2 @@
+-- NexoFab não instala produtos, preços ou materiais de uma empresa anterior.
+-- Templates opcionais serão criados por organização no onboarding.

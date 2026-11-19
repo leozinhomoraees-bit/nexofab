@@ -1,0 +1,7 @@
+/*
+ * Entrada versionada dos estilos globais.
+ *
+ * Manter este arquivo como ponto de entrada evita que um deploy incremental
+ * reutilize o mesmo asset imutavel quando globals.css recebe novos modulos.
+ */
+@import "./globals.css";
