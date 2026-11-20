@@ -1,14 +1,16 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(7);
+set local search_path = public, extensions;
+select plan(19);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password,
   email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at
 ) values
   ('10000000-0000-0000-0000-000000000001', null, 'authenticated', 'authenticated', 'owner-a@nexofab.test', '', now(), '{}'::jsonb, '{"full_name":"Owner A"}'::jsonb, now(), now()),
-  ('20000000-0000-0000-0000-000000000002', null, 'authenticated', 'authenticated', 'owner-b@nexofab.test', '', now(), '{}'::jsonb, '{"full_name":"Owner B"}'::jsonb, now(), now());
+  ('20000000-0000-0000-0000-000000000002', null, 'authenticated', 'authenticated', 'owner-b@nexofab.test', '', now(), '{}'::jsonb, '{"full_name":"Owner B"}'::jsonb, now(), now()),
+  ('30000000-0000-0000-0000-000000000003', null, 'authenticated', 'authenticated', 'suspended@nexofab.test', '', now(), '{}'::jsonb, '{"full_name":"Suspended User"}'::jsonb, now(), now());
 
 insert into public.organizations(id, trade_name) values
   ('a0000000-0000-0000-0000-000000000001', 'Tenant A'),
@@ -16,11 +18,13 @@ insert into public.organizations(id, trade_name) values
 
 insert into public.organization_members(organization_id, user_id, role, status) values
   ('a0000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'owner', 'active'),
-  ('b0000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000002', 'owner', 'active');
+  ('b0000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000002', 'owner', 'active'),
+  ('a0000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000003', 'comercial', 'suspended');
 
 update public.profiles set active_organization_id = 'a0000000-0000-0000-0000-000000000001' where id = '10000000-0000-0000-0000-000000000001';
 update public.profiles set active_organization_id = 'b0000000-0000-0000-0000-000000000002' where id = '20000000-0000-0000-0000-000000000002';
 
+-- 1 & 2: Tenant A cria registro e trigger atribui organization_id automaticamente
 select set_config('request.jwt.claims', '{"sub":"10000000-0000-0000-0000-000000000001","role":"authenticated","email":"owner-a@nexofab.test"}', true);
 set local role authenticated;
 select lives_ok(
@@ -34,14 +38,26 @@ select results_eq(
 );
 reset role;
 
+-- 3: Tenant B cria cliente, estoque, conta a pagar e orçamento com link público
 select set_config('request.jwt.claims', '{"sub":"20000000-0000-0000-0000-000000000002","role":"authenticated","email":"owner-b@nexofab.test"}', true);
 set local role authenticated;
 select lives_ok(
-  $$insert into public.customers(id, name, created_by) values ('b1000000-0000-0000-0000-000000000002', 'Cliente B', auth.uid())$$,
-  'Tenant B cria seu próprio registro'
+  $$
+    insert into public.customers(id, name, created_by) values ('b1000000-0000-0000-0000-000000000002', 'Cliente B', auth.uid());
+    insert into public.inventory_items(id, name, current_quantity, average_cost, active) values ('b2000000-0000-0000-0000-000000000002', 'Chapa B', 50, 10, true);
+    insert into public.payables(id, description, total_amount) values ('b3000000-0000-0000-0000-000000000002', 'Fornecedor B', 250);
+    insert into public.quotes(id, customer_id, customer_name, phone, service, subtotal, estimated_value, created_by)
+      values ('b4000000-0000-0000-0000-000000000002', 'b1000000-0000-0000-0000-000000000002', 'Cliente B', '11999990000', 'Placa B', 500, 500, auth.uid());
+    insert into public.quote_items(quote_id, description, quantity, unit_price)
+      values ('b4000000-0000-0000-0000-000000000002', 'Item B', 1, 500);
+    insert into public.proposal_shares(quote_id, token_hash)
+      values ('b4000000-0000-0000-0000-000000000002', encode(digest('token-publico-tenant-b-000000000000000000000000', 'sha256'), 'hex'));
+  $$,
+  'Tenant B cria seus próprios registros operacionais'
 );
 reset role;
 
+-- 4 a 11: Isolamento de leitura, escrita, troca de tenant e RPCs SECURITY DEFINER
 select set_config('request.jwt.claims', '{"sub":"10000000-0000-0000-0000-000000000001","role":"authenticated","email":"owner-a@nexofab.test"}', true);
 set local role authenticated;
 select results_eq(
@@ -60,11 +76,116 @@ select throws_ok(
   'Insert não pode escolher outro tenant'
 );
 select throws_ok(
+  $$update public.customers set organization_id = 'b0000000-0000-0000-0000-000000000002' where id = 'a1000000-0000-0000-0000-000000000001'$$,
+  'P0001',
+  'Não é permitido mover registros entre organizações',
+  'Update não pode mover registro para outro tenant'
+);
+select throws_ok(
   $$select public.set_active_organization('b0000000-0000-0000-0000-000000000002')$$,
   'P0001',
   'Usuário não pertence a esta organização',
   'Usuário não pode ativar organização alheia'
 );
+select throws_ok(
+  $$select public.update_quote_revision(
+    'b4000000-0000-0000-0000-000000000002',
+    '{"customerName":"Invadido","phone":"11999990000","service":"Hack","source":"interno"}'::jsonb,
+    '[{"description":"Item","quantity":1,"unitPrice":10}]'::jsonb
+  )$$,
+  'P0001',
+  'Orçamento não encontrado',
+  'RPC update_quote_revision bloqueia orçamento de outro tenant'
+);
+select throws_ok(
+  $$select public.register_quick_sale(
+    null, 'Cliente', '11999990000',
+    '[{"description":"Venda","quantity":1,"unitPrice":50,"inventoryItemId":"b2000000-0000-0000-0000-000000000002","stockQuantity":1}]'::jsonb,
+    'recebido', 'pix', current_date, null, null
+  )$$,
+  'P0001',
+  'Insumo de estoque não encontrado',
+  'RPC register_quick_sale bloqueia baixa de estoque de outro tenant'
+);
+select throws_ok(
+  $$select public.cancel_payable('b3000000-0000-0000-0000-000000000002')$$,
+  'P0001',
+  'Conta não encontrada ou já cancelada',
+  'RPC cancel_payable bloqueia conta a pagar de outro tenant'
+);
+reset role;
+
+-- 12 & 13: Aprovação pública anônima funciona e propaga o tenant B nos triggers
+select set_config('request.jwt.claims', '{}', true);
+set local role anon;
+select results_eq(
+  $$select (public.respond_public_proposal('token-publico-tenant-b-000000000000000000000000', 'aprovar', array[]::uuid[]) ->> 'saved')::boolean$$,
+  $$values (true)$$,
+  'Aprovação pública anônima conclui sem quebrar set_row_organization()'
+);
+reset role;
+
+select set_config('request.jwt.claims', '{"sub":"20000000-0000-0000-0000-000000000002","role":"authenticated","email":"owner-b@nexofab.test"}', true);
+set local role authenticated;
+select results_eq(
+  $$select (select count(*)::bigint from public.management_notifications where quote_id = 'b4000000-0000-0000-0000-000000000002') + (select count(*)::bigint from public.production_orders where quote_id = 'b4000000-0000-0000-0000-000000000002')$$,
+  $$values (2::bigint)$$,
+  'Triggers de proposta pública criam notificação e OS dentro do Tenant B'
+);
+reset role;
+
+-- 14 a 17: Convites (e-mail diferente, expiração, proteção de owner e uso único)
+insert into public.organization_invitations (organization_id, email, role, token_hash, invited_by, expires_at) values
+  ('a0000000-0000-0000-0000-000000000001', 'owner-a@nexofab.test', 'comercial', encode(digest('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'sha256'), 'hex'), '10000000-0000-0000-0000-000000000001', now() + interval '1 day'),
+  ('a0000000-0000-0000-0000-000000000001', 'owner-b@nexofab.test', 'comercial', encode(digest('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'sha256'), 'hex'), '10000000-0000-0000-0000-000000000001', now() - interval '1 minute');
+
+select set_config('request.jwt.claims', '{"sub":"20000000-0000-0000-0000-000000000002","role":"authenticated","email":"owner-b@nexofab.test"}', true);
+set local role authenticated;
+select throws_ok(
+  $$select public.accept_organization_invitation('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')$$,
+  'P0001',
+  'Entre com o mesmo e-mail que recebeu o convite',
+  'Aceite de convite exige e-mail idêntico ao convidado'
+);
+select throws_ok(
+  $$select public.accept_organization_invitation('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')$$,
+  'P0001',
+  'Convite expirado',
+  'Convite expirado é rejeitado'
+);
+reset role;
+
+select set_config('request.jwt.claims', '{"sub":"10000000-0000-0000-0000-000000000001","role":"authenticated","email":"owner-a@nexofab.test"}', true);
+set local role authenticated;
+select results_eq(
+  $$select public.accept_organization_invitation('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')$$,
+  $$values ('a0000000-0000-0000-0000-000000000001'::uuid)$$,
+  'Convite válido é aceito pelo e-mail correspondente'
+);
+select results_eq(
+  $$select role from public.organization_members where organization_id = 'a0000000-0000-0000-0000-000000000001' and user_id = auth.uid()$$,
+  $$values ('owner'::text)$$,
+  'Convite com papel menor não rebaixa owner existente'
+);
+select throws_ok(
+  $$select public.accept_organization_invitation('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')$$,
+  'P0001',
+  'Convite inválido ou já utilizado',
+  'Convite já aceito não pode ser reutilizado'
+);
+reset role;
+
+-- 18: Membership suspensa não pode ativar organização
+select set_config('request.jwt.claims', '{"sub":"30000000-0000-0000-0000-000000000003","role":"authenticated","email":"suspended@nexofab.test"}', true);
+set local role authenticated;
+select throws_ok(
+  $$select public.set_active_organization('a0000000-0000-0000-0000-000000000001')$$,
+  'P0001',
+  'Usuário não pertence a esta organização',
+  'Membership suspensa é bloqueada em set_active_organization'
+);
+reset role;
+
 select * from finish();
 
 rollback;
