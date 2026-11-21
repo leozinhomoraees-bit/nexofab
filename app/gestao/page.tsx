@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getOrganizationSubscriptionSummary } from "@/lib/billing";
 import { ManagementDashboard } from "./management-dashboard";
 
 export const dynamic = "force-dynamic";
@@ -26,9 +27,12 @@ export default async function ManagementPage({ searchParams }: { searchParams: P
     .eq("status", "active");
   const organizationIds = (memberships ?? []).map((membership) => membership.organization_id);
   const activeMembership = (memberships ?? []).find((membership) => membership.organization_id === profile.active_organization_id);
-  const { data: organizations } = organizationIds.length
-    ? await supabase.from("organizations").select("id, trade_name").in("id", organizationIds).order("trade_name")
-    : { data: [] };
+  const [{ data: organizations }, { summary: subscriptionSummary }] = await Promise.all([
+    organizationIds.length
+      ? supabase.from("organizations").select("id, trade_name").in("id", organizationIds).order("trade_name")
+      : Promise.resolve({ data: [] }),
+    getOrganizationSubscriptionSummary(supabase, profile.active_organization_id),
+  ]);
 
   const requestedSection = (await searchParams).secao;
   return <ManagementDashboard
@@ -37,5 +41,6 @@ export default async function ManagementPage({ searchParams }: { searchParams: P
     activeOrganizationId={profile.active_organization_id}
     activeRole={activeMembership?.role ?? "member"}
     organizations={organizations ?? []}
+    subscriptionSummary={subscriptionSummary}
   />;
 }

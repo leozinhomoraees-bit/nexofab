@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
+import { getOrganizationSubscriptionSummary, subscriptionBlockedResponse } from "@/lib/billing";
 
-export async function getManagementAccess(roles?: string[]) {
+export async function getManagementAccess(roles?: string[], options?: { requireActiveSubscription?: boolean }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { response: Response.json({ error: "Acesso não autorizado" }, { status: 401 }) };
@@ -21,5 +22,11 @@ export async function getManagementAccess(roles?: string[]) {
     return { response: Response.json({ error: "Seu perfil não possui acesso a esta área" }, { status: 403 }) };
   }
 
-  return { supabase, user, role, organizationId: profile.active_organization_id as string };
+  const organizationId = profile.active_organization_id as string;
+  if (options?.requireActiveSubscription) {
+    const { summary } = await getOrganizationSubscriptionSummary(supabase, organizationId);
+    if (!summary.canWrite) return { response: subscriptionBlockedResponse(summary) };
+  }
+
+  return { supabase, user, role, organizationId };
 }

@@ -597,3 +597,34 @@ main.min-h-screen, main.min-h-screen * { font-family:"Sora",sans-serif; }
 .organization-switcher { min-width:170px; max-width:230px; min-height:42px; padding:0 10px; display:flex; align-items:center; gap:8px; border:1px solid #dce4e5; border-radius:9px; background:#f7fafa; color:#254047; }.organization-switcher svg { width:16px; color:#16988e; }.organization-switcher select { min-width:0; width:100%; border:0; outline:0; background:transparent; color:#254047; font-size:11px; font-weight:800; text-overflow:ellipsis; }
 .team-heading-actions { display:flex; gap:9px; }.team-summary { margin-bottom:18px; display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }.team-summary article { min-height:92px; padding:18px; display:flex; align-items:center; gap:13px; border:1px solid #dce5e5; border-radius:11px; background:#fff; box-shadow:0 10px 30px #14333b09; }.team-summary svg { width:25px; color:#16988e; }.team-summary div { display:grid; gap:4px; }.team-summary small { color:#77878b; font-size:8px; letter-spacing:.1em; }.team-summary b { color:#173137; font-size:20px; }.team-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }.team-card { overflow:hidden; border:1px solid #dce5e5; border-radius:12px; background:#fff; box-shadow:0 12px 32px #17333b09; }.team-card>header { padding:18px 20px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #e7eded; background:#f8fbfa; }.team-card>header div { display:grid; gap:3px; }.team-card>header small { color:#16988e; font-size:8px; font-weight:900; letter-spacing:.12em; }.team-card>header h2 { margin:0; color:#173137; font-size:16px; }.team-card>header svg { width:21px; color:#6d7f84; }.team-list,.invitation-list { display:grid; }.team-list article,.invitation-list article { min-height:68px; padding:12px 18px; display:flex; align-items:center; gap:12px; border-bottom:1px solid #edf1f2; }.team-list article:last-child,.invitation-list article:last-child { border-bottom:0; }.team-list>p,.invitation-list>p { margin:0; padding:30px 20px; color:#7a898d; font-size:11px; text-align:center; }.team-list article>span { width:36px; height:36px; display:grid; place-items:center; border-radius:50%; color:#fff; background:#153c43; font-size:11px; font-weight:900; }.team-list article>div,.invitation-list article>div { min-width:0; display:grid; gap:3px; flex:1; }.team-list b,.invitation-list b { overflow:hidden; color:#273d42; font-size:10px; text-overflow:ellipsis; }.team-list small,.invitation-list small { color:#7a898d; font-size:8px; }.team-list strong { padding:5px 8px; border-radius:20px; color:#117d74; background:#e8f6f3; font-size:8px; }.invitation-list>article>span { padding:5px 8px; border-radius:20px; font-size:8px; font-weight:800; }.invitation-list>article>span.pending { color:#8b6417; background:#fff3d8; }.invitation-list>article>span.accepted { color:#117d74; background:#e8f6f3; }.team-invite-form { width:min(580px,92vw); }.invite-link-field { margin-top:16px; display:grid; gap:7px; color:#354b50; font-size:9px; font-weight:800; }.invite-link-field>div { display:grid; grid-template-columns:1fr auto; gap:8px; }
 @media(max-width:1000px){.organization-switcher{min-width:140px}.dash-search{display:none}.team-grid{grid-template-columns:1fr}}@media(max-width:700px){.organization-switcher{max-width:150px}.dash-new-quote{display:none}.team-heading-actions{width:100%;flex-wrap:wrap}.team-summary{grid-template-columns:1fr}.team-invite-form{width:94vw}}
+
+/* Assinatura, trial de 7 dias e ciclos de cobrança */
+.billing-banner { margin-bottom:16px; padding:11px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; border:1px solid #cce3df; border-radius:10px; background:#eff9f7; color:#18454b; font-size:10px; }
+.billing-banner.warning { border-color:#ead5a7; background:#fff8e8; color:#745315; }
+.billing-banner.blocked { border-color:#ecc2b8; background:#fff2ef; color:#8f3223; }
+.billing-workspace { display:grid; gap:18px; }
+.billing-alert { padding:14px 18px; display:flex; align-items:flex-start; gap:12px; border:1px solid #ecc2b8; border-radius:11px; background:#fff2ef; color:#8f3223; }
+.billing-alert svg { width:20px; flex:0 0 auto; margin-top:2px; }
+.billing-alert b { display:block; font-size:11px; margin-bottom:3px; }
+.billing-alert p { margin:0; font-size:9px; line-height:1.5; }
+.billing-summary { margin-bottom:0; }
+.billing-cycle-tabs { display:inline-flex; padding:4px; gap:4px; border:1px solid #d5e2e2; border-radius:9px; background:#fff; }
+.billing-cycle-tabs button { padding:7px 13px; border:0; border-radius:6px; background:transparent; color:#526b6f; font-size:9px; font-weight:800; cursor:pointer; }
+.billing-cycle-tabs button.active { background:#153c43; color:#fff; }
+.billing-plans-body { padding:18px 20px; display:grid; gap:16px; }
+.billing-cycle-note { margin:0; padding:12px 14px; display:flex; align-items:center; gap:9px; border:1px solid #dce8e6; border-radius:9px; background:#f8fbfa; color:#335358; font-size:9px; line-height:1.5; }
+.billing-cycle-note svg { width:16px; flex:0 0 auto; color:#16988e; }
+.billing-plan-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
+.billing-plan-option { padding:18px; display:grid; gap:10px; border:1px solid #dce5e5; border-radius:11px; background:#fff; }
+.billing-plan-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.billing-plan-head h3 { margin:0; color:#173137; font-size:15px; }
+.billing-discount-badge { padding:4px 8px; border-radius:20px; background:#e8f6f3; color:#0e7a70; font-size:8px; font-weight:900; }
+.billing-plan-option p { margin:0; color:#697c80; font-size:9px; line-height:1.5; }
+.billing-price-line { display:flex; align-items:baseline; gap:5px; }
+.billing-price-line strong { color:#153c43; font-size:22px; }
+.billing-price-line small,.billing-monthly-equiv { color:#74868a; font-size:9px; }
+.billing-empty-plans { padding:20px; display:flex; align-items:flex-start; gap:12px; border:1px dashed #c7dad7; border-radius:10px; background:#f8fbfa; color:#2b4a4f; }
+.billing-empty-plans svg { width:20px; flex:0 0 auto; color:#16988e; margin-top:2px; }
+.billing-empty-plans b { display:block; font-size:11px; margin-bottom:4px; }
+.billing-empty-plans p { margin:0; color:#5a7074; font-size:9px; line-height:1.6; }
+@media(max-width:700px){.billing-banner{flex-direction:column;align-items:flex-start}.billing-plans-card>header{flex-direction:column;align-items:flex-start;gap:12px}}

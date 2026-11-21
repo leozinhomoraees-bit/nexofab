@@ -35,7 +35,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const access = await getManagementAccess(["admin"]);
+  const access = await getManagementAccess(["admin"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = inviteSchema.safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: "Revise o e-mail e a função do convite." }, { status: 400 });
