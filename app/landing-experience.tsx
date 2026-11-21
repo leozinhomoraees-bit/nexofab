@@ -1,6 +1,6 @@
 "use client";
 
-import { CSSProperties, useEffect, useState } from "react";
+import { CSSProperties, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -169,22 +169,32 @@ function revealDelay(ms: number): CSSProperties {
 export function LandingExperience() {
   const [activeTab, setActiveTab] = useState<PreviewTabId>("comercial");
   const [selectedCycle, setSelectedCycle] = useState<PlanCycle>("quarterly");
-  const [scrolled, setScrolled] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [heroShift, setHeroShift] = useState(0);
+  const progressRef = useRef<HTMLDivElement>(null);
+  const navWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const updateScroll = () => {
+    let rafId = 0;
+
+    const flushScroll = () => {
+      rafId = 0;
       const y = window.scrollY;
       const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-      setScrolled(y > 24);
-      setProgress(docHeight > 0 ? Math.min(1, Math.max(0, y / docHeight)) : 0);
-      setHeroShift(Math.min(48, y * 0.08));
+      const ratio = docHeight > 0 ? Math.min(1, Math.max(0, y / docHeight)) : 0;
+      if (progressRef.current) {
+        progressRef.current.style.transform = `scaleX(${ratio})`;
+      }
+      if (navWrapRef.current) {
+        navWrapRef.current.classList.toggle("scrolled", y > 24);
+      }
     };
 
-    const frame = window.requestAnimationFrame(updateScroll);
-    window.addEventListener("scroll", updateScroll, { passive: true });
-    window.addEventListener("resize", updateScroll, { passive: true });
+    const scheduleScroll = () => {
+      if (!rafId) rafId = window.requestAnimationFrame(flushScroll);
+    };
+
+    scheduleScroll();
+    window.addEventListener("scroll", scheduleScroll, { passive: true });
+    window.addEventListener("resize", scheduleScroll, { passive: true });
 
     const revealElements = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
     const observer = new IntersectionObserver(
@@ -202,9 +212,9 @@ export function LandingExperience() {
     revealElements.forEach((element) => observer.observe(element));
 
     return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", updateScroll);
-      window.removeEventListener("resize", updateScroll);
+      if (rafId) window.cancelAnimationFrame(rafId);
+      window.removeEventListener("scroll", scheduleScroll);
+      window.removeEventListener("resize", scheduleScroll);
       observer.disconnect();
     };
   }, []);
@@ -213,12 +223,10 @@ export function LandingExperience() {
 
   return (
     <div className="nf-landing">
-      <div className="nf-scroll-progress" style={{ transform: `scaleX(${progress})` }} aria-hidden="true" />
+      <div ref={progressRef} className="nf-scroll-progress" style={{ transform: "scaleX(0)" }} aria-hidden="true" />
       <div className="nf-bg-grid" aria-hidden="true" />
-      <div className="nf-orb nf-orb-1" style={{ transform: `translate3d(0, ${heroShift * 0.7}px, 0)` }} aria-hidden="true" />
-      <div className="nf-orb nf-orb-2" style={{ transform: `translate3d(0, ${-heroShift * 0.5}px, 0)` }} aria-hidden="true" />
 
-      <div className={scrolled ? "nf-nav-wrap scrolled" : "nf-nav-wrap"}>
+      <div ref={navWrapRef} className="nf-nav-wrap">
         <nav className="nf-nav" aria-label="Navegação principal">
           <a href="#inicio" className="nf-brand">
             <span>Nexo</span>Fab
@@ -273,10 +281,7 @@ export function LandingExperience() {
           </div>
 
           <div id="produto" className="nf-stage-wrap" data-reveal="pending" style={revealDelay(80)}>
-            <div
-              className="nf-stage"
-              style={{ transform: `translate3d(0, ${-heroShift * 0.22}px, 0)` }}
-            >
+            <div className="nf-stage">
               <div className="nf-stage-bar">
                 <div className="nf-dots" aria-hidden="true">
                   <i /><i /><i />
