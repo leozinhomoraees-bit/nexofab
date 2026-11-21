@@ -1,20 +1,56 @@
-import { QuoteForm } from "./quote-form";
+import Link from "next/link";
+import { Check } from "lucide-react";
 import { HeroMedia } from "./hero-media";
 
-const processes = [
-  ["01", "Grandes formatos", "Impressão para projetos de pequeno a grande porte, com materiais e acabamentos sob medida."],
-  ["02", "Router CNC", "Cortes precisos em ACM, MDF, PVC, acrílico e projetos especiais."],
-  ["03", "Corte a laser", "Corte e gravação com acabamento limpo para peças e comunicação visual."],
-  ["04", "Impressão 3D", "Protótipos, peças técnicas e objetos personalizados sob medida."],
+const corePillars = [
+  ["01", "Comercial & Propostas", "Orçamentos com alternativas, link online para aprovação do cliente e histórico de revisões."],
+  ["02", "Precificação & Corte", "Cálculo técnico por m², chapas, insumos, máquinas, plano de corte e margem real de lucro."],
+  ["03", "Produção & Arte", "Ordens de produção automáticas após aprovação, reserva de estoque e aprovação de arte pelo cliente."],
+  ["04", "Financeiro & Equipe", "Contas a pagar e receber, recibo digital, ponto de equilíbrio, DRE e acessos por função."],
 ];
 
-const projectPaths = [
-  ["Fachadas e letreiros", "ACM, lona, letras caixa e iluminação"],
-  ["Plotagem", "Vitrines, paredes, placas e veículos"],
-  ["Sinalização", "Ambientes, segurança e orientação"],
-  ["PDV e eventos", "Displays, painéis e peças promocionais"],
-  ["Peças sob medida", "Corte CNC, laser e gravação"],
-  ["Protótipos", "Impressão 3D e validação de ideias"],
+const targetSegments = [
+  ["Comunicação visual e fachadas", "Orçamentos técnicos de ACM, letras caixa, lonas, adesivos e instalação"],
+  ["Gráficas e grandes formatos", "Precificação por m², cálculo de perda de mídia e pedidos sob medida"],
+  ["Corte CNC e laser", "Plano de corte otimizado, tempo de máquina e reserva de chapas no estoque"],
+  ["Marcenaria e mobiliário técnico", "Composição de custos, insumos, fornecedores e prazo de entrega por OS"],
+  ["Displays, eventos e PDV", "Alternativas na mesma proposta para o cliente aprovar direto pelo link"],
+  ["Prototipagem e impressão 3D", "Controle de horas de máquina, custos reais e fechamento financeiro"],
+];
+
+const plans = [
+  {
+    name: "Mensal",
+    badge: "Sem fidelidade",
+    price: "R$ 29,00",
+    period: "/mês",
+    note: "Cobrança mensal de R$ 29,00 · cancele quando quiser",
+    featured: false,
+  },
+  {
+    name: "Trimestral",
+    badge: "14% OFF · Mais escolhido",
+    price: "R$ 25,00",
+    period: "/mês",
+    note: "Cobrança trimestral de R$ 75,00 a cada 3 meses",
+    featured: true,
+  },
+  {
+    name: "Anual",
+    badge: "31% OFF · Melhor valor",
+    price: "R$ 20,00",
+    period: "/mês",
+    note: "Cobrança anual de R$ 240,00 · maior economia no ano",
+    featured: false,
+  },
+];
+
+const includedFeatures = [
+  "7 dias de teste grátis sem cadastrar cartão",
+  "Todos os módulos liberados (Comercial, Precificação, Produção, Estoque e Financeiro)",
+  "Até 10 usuários ativos por empresa com controle de permissões",
+  "Proposta online, aprovação de arte e recibo digital com a identidade da sua marca",
+  "Isolamento completo por empresa e pagamento via PIX, boleto ou cartão",
 ];
 
 export default function Home() {
@@ -23,116 +59,186 @@ export default function Home() {
       <nav className="site-nav">
         <a className="brand nexofab-wordmark" href="#inicio" aria-label="NexoFab — início"><span>Nexo</span>Fab</a>
         <div className="nav-links" aria-label="Navegação principal">
-          <a href="#servicos">Serviços</a><a href="#solucoes">Soluções</a>
-          <a href="#portfolio">Projetos</a><a href="#contato">Contato</a>
+          <a href="#modulos">Módulos</a>
+          <a href="#segmentos">Para quem é</a>
+          <a href="#planos">Planos</a>
+          <a href="#duvidas">Dúvidas</a>
         </div>
-        <a className="nav-cta" href="#orcamento">Pedir orçamento</a>
+        <div className="nav-actions">
+          <Link className="nav-login-link" href="/login">Entrar</Link>
+          <Link className="nav-cta" href="/cadastro">Testar 7 dias grátis</Link>
+        </div>
       </nav>
+
       <section id="inicio" className="hero">
         <HeroMedia />
         <div className="hero-shade" /><div className="hero-grid" aria-hidden="true" />
         <div className="hero-content">
-          <p className="eyebrow"><span /> Gestão conectada de ponta a ponta</p>
-          <h1>Do arquivo à<br /><em>matéria.</em></h1>
-          <p className="hero-copy">Da fachada ao protótipo: impressão, corte e fabricação combinados para transformar sua ideia em uma solução pronta para usar.</p>
+          <p className="eyebrow"><span /> SaaS multiempresa para fabricação e comunicação visual</p>
+          <h1>Do orçamento<br />ao <em>caixa.</em></h1>
+          <p className="hero-copy">
+            O sistema completo para gerenciar orçamentos, precificação técnica, plano de corte, ordens de produção,
+            aprovação de arte, estoque e financeiro da sua empresa — em um só lugar.
+          </p>
           <div className="hero-actions">
-            <a className="primary-button" href="#orcamento">Solicitar orçamento</a>
-            <a className="secondary-button" href="#portfolio">Conhecer possibilidades</a>
+            <Link className="primary-button" href="/cadastro">Começar 7 dias grátis</Link>
+            <a className="secondary-button" href="#planos">Ver planos</a>
           </div>
           <div className="hero-proof">
-            <div><strong>Sob medida</strong><span>cada projeto começa pela aplicação</span></div>
-            <div><strong>4 tecnologias</strong><span>processos que trabalham juntos</span></div>
-            <div><strong>De ponta a ponta</strong><span>produção, acabamento e instalação</span></div>
+            <div><strong>7 dias grátis</strong><span>teste completo sem cartão de crédito</span></div>
+            <div><strong>Até 10 usuários</strong><span>acesso por função para toda a equipe</span></div>
+            <div><strong>Sua identidade</strong><span>propostas, artes e recibos com sua logo</span></div>
           </div>
         </div>
-        <div className="hero-capability" aria-label="Tecnologias disponíveis">
-          <span>Produção conectada</span>
-          <b>Impressão <i /> CNC <i /> Laser <i /> 3D</b>
+        <div className="hero-capability" aria-label="Módulos integrados">
+          <span>Operação conectada</span>
+          <b>Orçamentos <i /> Precificação <i /> Produção <i /> Financeiro</b>
         </div>
-        <p className="vertical-label">IMPRESSÃO · CORTE · FORMA · ACABAMENTO</p>
+        <p className="vertical-label">ORÇAMENTO · PREÇO · PRODUÇÃO · FINANCEIRO</p>
       </section>
-      <section id="servicos" className="process-strip" aria-label="Nossos processos">
-        {processes.map(([number, title, description]) => (
+
+      <section id="modulos" className="process-strip" aria-label="Pilares da plataforma">
+        {corePillars.map(([number, title, description]) => (
           <article key={title}><span>{number}</span><div><h2>{title}</h2><p>{description}</p></div></article>
         ))}
       </section>
 
-      <section className="project-paths" aria-labelledby="project-paths-title">
+      <section id="segmentos" className="project-paths" aria-labelledby="project-paths-title">
         <div className="project-paths-intro">
-          <p className="section-kicker">Comece pela necessidade</p>
-          <h2 id="project-paths-title">O que você precisa produzir?</h2>
-          <p>Não é necessário saber o material ou a máquina. Conte onde será usado e nós indicamos o processo adequado.</p>
+          <p className="section-kicker">Feito para quem produz sob medida</p>
+          <h2 id="project-paths-title">Um sistema que entende medidas, chapas, máquinas e margem.</h2>
+          <p>Nada de planilhas soltas ou ERPs genéricos. O NexoFab nasceu da rotina real de comunicação visual, corte e fabricação.</p>
         </div>
         <div className="project-paths-grid">
-          {projectPaths.map(([title, description], index) => (
-            <a href="#orcamento" key={title}>
+          {targetSegments.map(([title, description], index) => (
+            <Link href="/cadastro" key={title}>
               <span>{String(index + 1).padStart(2, "0")}</span>
               <div><b>{title}</b><small>{description}</small></div>
               <i aria-hidden="true">↗</i>
-            </a>
+            </Link>
           ))}
         </div>
       </section>
 
-      <section id="solucoes" className="section solutions-section">
-        <div className="section-heading"><div><p className="section-kicker">Capacidade conectada</p><h2>Uma oficina.<br />Muitas possibilidades.</h2></div><p>Combinamos impressão, corte e fabricação para entregar desde uma peça única até projetos completos de comunicação visual.</p></div>
-        <div className="solution-grid">
-          <article className="solution-card feature"><span>01 / COMUNICAÇÃO VISUAL</span><h3>Sua marca ocupando o espaço certo.</h3><p>Fachadas, sinalização, painéis, plotagem, banners, displays e ambientação produzidos com consistência de cor e acabamento.</p><ul><li>Fachadas e letreiros</li><li>Plotagem e vitrines</li><li>Sinalização interna e externa</li><li>Materiais para eventos e PDV</li></ul></article>
-          <article className="solution-card"><span>02 / FABRICAÇÃO DIGITAL</span><h3>Geometrias que saem da tela.</h3><p>Router CNC e laser para projetos de arquitetos, designers, indústrias, lojas e criadores.</p><b>ACM · MDF · PVC · ACRÍLICO · MADEIRA</b></article>
-          <article className="solution-card"><span>03 / PROTOTIPAGEM</span><h3>Teste antes de produzir em escala.</h3><p>Impressão 3D para validar encaixes, formas, peças técnicas e ideias personalizadas.</p><b>PLA · PETG · PEÇAS TÉCNICAS · MOCKUPS</b></article>
+      <section className="section solutions-section">
+        <div className="section-heading">
+          <div><p className="section-kicker">Gestão integrada</p><h2>Menos retrabalho.<br />Mais lucro por pedido.</h2></div>
+          <p>Quando o cliente aprova a proposta pelo link, o pedido entra automaticamente na fila de produção com reserva de material e previsão financeira.</p>
         </div>
-      </section>
-
-      <section id="portfolio" className="section portfolio-section">
-        <div className="section-heading light"><div><p className="section-kicker">Do problema à entrega</p><h2>Projetos feitos para<br />funcionar de verdade.</h2></div><p>Nem todo projeto cabe em um catálogo. Nossa força está em entender a aplicação, combinar processos e encontrar uma solução viável.</p></div>
-        <div className="project-grid">
-          <article className="project-card orange"><span>FACHADAS</span><strong>Presença que começa antes da porta.</strong><small>ACM · impressão · corte CNC · instalação</small></article>
-          <article className="project-card cyan"><span>PDV & EVENTOS</span><strong>Estruturas que montam, comunicam e resistem.</strong><small>Displays · painéis · adesivos · peças especiais</small></article>
-          <article className="project-card blue"><span>PRODUTO & INDÚSTRIA</span><strong>Protótipos e componentes sob medida.</strong><small>Impressão 3D · laser · usinagem</small></article>
+        <div className="solution-grid">
+          <article className="solution-card feature">
+            <span>01 / COMERCIAL & PROPOSTA ONLINE</span>
+            <h3>Orçamentos rápidos que fecham mais vendas.</h3>
+            <p>Envie propostas profissionais com a sua marca, alternativas de preço no mesmo link e histórico de revisões aprovadas.</p>
+            <ul>
+              <li>Link público de aprovação para o cliente</li>
+              <li>Precificação automática com margem e perda</li>
+              <li>Plano de corte enviado direto para o orçamento</li>
+              <li>Venda rápida de balcão com baixa de estoque</li>
+            </ul>
+          </article>
+          <article className="solution-card">
+            <span>02 / CHÃO DE FÁBRICA</span>
+            <h3>Produção previsível do briefing à entrega.</h3>
+            <p>Acompanhe etapas, responsáveis, aprovação de arte online pelo cliente, reservas de insumos e custos reais por OS.</p>
+            <b>OS · ARTE ONLINE · ESTOQUE · CUSTO REAL</b>
+          </article>
+          <article className="solution-card">
+            <span>03 / FINANCEIRO & EQUIPE</span>
+            <h3>Clareza total no caixa e nas permissões.</h3>
+            <p>Contas a pagar e receber, recibo digital, ponto de equilíbrio, DRE gerencial e convites individuais por setor.</p>
+            <b>PIX · BOLETO · DRE · MULTIUSUÁRIO</b>
+          </article>
         </div>
       </section>
 
       <section className="workflow-section">
-        <div><p className="section-kicker">Processo sem surpresa</p><h2>Você sabe onde<br />o projeto está.</h2></div>
-        <ol><li><span>01</span><div><b>Briefing técnico</b><p>Entendemos uso, medidas, prazo e acabamento.</p></div></li><li><span>02</span><div><b>Orçamento claro</b><p>Especificações e condições reunidas em uma proposta.</p></div></li><li><span>03</span><div><b>Prova e produção</b><p>Aprovação antes de ocupar máquina e material.</p></div></li><li><span>04</span><div><b>Entrega ou instalação</b><p>Conferência final e fechamento do serviço.</p></div></li></ol>
+        <div><p className="section-kicker">Comece em minutos</p><h2>Da criação da conta<br />ao primeiro orçamento.</h2></div>
+        <ol>
+          <li><span>01</span><div><b>Crie sua conta grátis</b><p>Cadastre seu nome, e-mail e senha sem precisar de cartão de crédito.</p></div></li>
+          <li><span>02</span><div><b>Configure sua empresa</b><p>Adicione logo, dados fiscais e já libere 7 dias de acesso completo.</p></div></li>
+          <li><span>03</span><div><b>Convide sua equipe</b><p>Envie links seguros por função para comercial, produção, estoque e financeiro.</p></div></li>
+          <li><span>04</span><div><b>Assine no ciclo ideal</b><p>Escolha mensal, trimestral ou anual com PIX, boleto ou cartão pelo Asaas.</p></div></li>
+        </ol>
       </section>
 
-      <section id="orcamento" className="section quote-section">
-        <div className="quote-intro"><p className="section-kicker">Orçamento guiado</p><h2>Conte o essencial.<br />Nós cuidamos do técnico.</h2><p>Escolha o tipo de produção e informe o que já sabe. Se material ou acabamento ainda forem dúvida, nossa equipe recomenda a melhor opção.</p><div className="quote-note"><b>Projeto complexo?</b><span>Envie a ideia mesmo assim. Fachadas, instalações e peças especiais passam por análise técnica.</span></div></div>
-        <QuoteForm />
+      <section id="planos" className="section saas-pricing-section" aria-labelledby="pricing-title">
+        <div className="section-heading">
+          <div>
+            <p className="section-kicker">Planos transparentes</p>
+            <h2 id="pricing-title">Um plano completo.<br />Escolha o melhor ciclo.</h2>
+          </div>
+          <p>Todos os módulos liberados desde o primeiro dia, com até 10 usuários ativos por empresa e 7 dias grátis para testar na prática.</p>
+        </div>
+
+        <div className="saas-pricing-grid">
+          {plans.map((plan) => (
+            <article key={plan.name} className={plan.featured ? "saas-plan-card featured" : "saas-plan-card"}>
+              <div className="saas-plan-top">
+                <span className="saas-plan-badge">{plan.badge}</span>
+                <h3>Plano Completo · {plan.name}</h3>
+              </div>
+              <div className="saas-plan-price">
+                <strong>{plan.price}</strong>
+                <span>{plan.period}</span>
+              </div>
+              <p className="saas-plan-note">{plan.note}</p>
+              <Link href="/cadastro" className={plan.featured ? "primary-button saas-plan-cta" : "secondary-button saas-plan-cta"}>
+                Começar 7 dias grátis
+              </Link>
+            </article>
+          ))}
+        </div>
+
+        <ul className="saas-included-list">
+          {includedFeatures.map((item) => (
+            <li key={item}><Check className="size-4" /><span>{item}</span></li>
+          ))}
+        </ul>
       </section>
 
-      <section className="visitor-faq" aria-labelledby="visitor-faq-title">
+      <section id="duvidas" className="visitor-faq" aria-labelledby="visitor-faq-title">
         <div className="visitor-faq-heading">
-          <p className="section-kicker">Antes de começar</p>
-          <h2 id="visitor-faq-title">Dúvidas que não precisam atrasar seu projeto.</h2>
-          <a href="#orcamento">Enviar minha ideia <span aria-hidden="true">→</span></a>
+          <p className="section-kicker">Perguntas frequentes</p>
+          <h2 id="visitor-faq-title">Tudo claro antes de começar seu teste grátis.</h2>
+          <Link href="/cadastro">Criar minha conta grátis <span aria-hidden="true">→</span></Link>
         </div>
         <div className="visitor-faq-list">
           <details open>
-            <summary>Não sei qual material escolher. Posso pedir orçamento?</summary>
-            <p>Sim. Informe a aplicação, as medidas aproximadas e se o uso será interno ou externo. A recomendação técnica entra na análise.</p>
+            <summary>Preciso cadastrar cartão de crédito para os 7 dias grátis?</summary>
+            <p>Não. Você cria sua conta, cadastra sua empresa e testa todos os módulos por 7 dias sem informar cartão.</p>
           </details>
           <details>
-            <summary>Vocês fazem projetos que combinam mais de um processo?</summary>
-            <p>Sim. Fachadas, displays, sinalização e peças especiais podem reunir impressão, corte, estrutura, acabamento e instalação.</p>
+            <summary>O que acontece se os 7 dias terminarem antes de eu assinar?</summary>
+            <p>Nenhum dado é perdido. A empresa entra em modo somente leitura para consulta e volta a operar normalmente assim que a assinatura for ativada.</p>
           </details>
           <details>
-            <summary>Preciso ter o arquivo pronto?</summary>
-            <p>Não necessariamente. Envie o que já tiver — referência, foto, medidas ou descrição — para avaliarmos o próximo passo.</p>
+            <summary>Quantas pessoas da minha equipe podem usar o sistema?</summary>
+            <p>O Plano Completo inclui até 10 usuários ativos por empresa, com convites individuais por e-mail e controle de funções (administrador, comercial, produção, estoque e financeiro).</p>
           </details>
           <details>
-            <summary>Como recebo a proposta?</summary>
-            <p>Depois da análise, você recebe uma proposta com especificações, valores e condições para aprovar com clareza.</p>
+            <summary>Quais formas de pagamento são aceitas?</summary>
+            <p>Você pode assinar nos ciclos mensal, trimestral ou anual pagando por PIX, boleto bancário ou cartão de crédito com segurança via Asaas.</p>
           </details>
         </div>
       </section>
 
       <section id="contato" className="contact-section">
-        <div><p className="section-kicker">Operação conectada</p><h2>Vamos colocar<br />sua ideia em produção?</h2></div>
-        <div className="contact-meta"><p><span>ATENDIMENTO</span>Atendimento conforme sua empresa</p><p><span>HORÁRIO</span>Segunda a sexta · horário comercial</p></div>
+        <div>
+          <p className="section-kicker">Pronto para organizar sua operação?</p>
+          <h2>Teste o NexoFab na sua<br />empresa por 7 dias grátis.</h2>
+        </div>
+        <div className="contact-meta saas-final-cta">
+          <Link className="primary-button" href="/cadastro">Criar conta grátis</Link>
+          <Link className="secondary-button" href="/login">Já tenho conta</Link>
+        </div>
       </section>
-      <footer><a className="brand nexofab-wordmark" href="#inicio"><span>Nexo</span>Fab</a><p>Gestão conectada para fabricação</p><small>© {new Date().getFullYear()} NexoFab</small></footer>
+
+      <footer>
+        <a className="brand nexofab-wordmark" href="#inicio"><span>Nexo</span>Fab</a>
+        <p>SaaS multiempresa para orçamentos, precificação, produção, estoque e financeiro</p>
+        <small>© {new Date().getFullYear()} NexoFab</small>
+      </footer>
     </main>
   );
 }

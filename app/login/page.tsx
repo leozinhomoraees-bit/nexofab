@@ -1,14 +1,24 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, MouseEvent, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { LockKeyhole, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  function goToSignup(event: MouseEvent<HTMLAnchorElement>) {
+    const next = new URLSearchParams(window.location.search).get("next");
+    if (next && next.startsWith("/") && !next.startsWith("//") && !next.includes("\\")) {
+      event.preventDefault();
+      router.push(`/cadastro?next=${encodeURIComponent(next)}`);
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -49,13 +59,20 @@ export default function LoginPage() {
           <label className="block text-sm font-semibold">E-mail
             <span className="mt-2 flex items-center gap-2 rounded-xl border border-white/15 bg-black/20 px-3"><Mail className="size-4 text-white/45" /><Input name="email" type="email" autoComplete="email" required className="border-0 bg-transparent px-0 text-white shadow-none focus-visible:ring-0" /></span>
           </label>
-          <label className="block text-sm font-semibold">Senha
+          <label className="block text-sm font-semibold">
+            <span className="flex items-center justify-between">
+              <span>Senha</span>
+              <Link href="/esqueci-senha" className="text-xs font-medium text-[#c6f054] hover:underline">Esqueci minha senha</Link>
+            </span>
             <span className="mt-2 flex items-center gap-2 rounded-xl border border-white/15 bg-black/20 px-3"><LockKeyhole className="size-4 text-white/45" /><Input name="password" type="password" autoComplete="current-password" required className="border-0 bg-transparent px-0 text-white shadow-none focus-visible:ring-0" /></span>
           </label>
           {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
           <Button type="submit" disabled={loading} className="h-12 w-full bg-[#c6f054] font-bold text-[#07150f] hover:bg-[#d8ff70]">{loading ? "Entrando..." : "Entrar"}</Button>
         </form>
-        <Link href="/" className="mt-7 block text-center text-sm text-white/55 hover:text-white">Voltar ao site</Link>
+        <p className="mt-6 text-center text-sm text-white/60">
+          Ainda não tem conta? <Link href="/cadastro" onClick={goToSignup} className="font-semibold text-[#c6f054] hover:underline">Testar 7 dias grátis</Link>
+        </p>
+        <Link href="/" className="mt-4 block text-center text-sm text-white/55 hover:text-white">Voltar ao site</Link>
       </section>
     </main>
   );
