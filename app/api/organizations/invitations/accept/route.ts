@@ -12,7 +12,8 @@ export async function POST(request: Request) {
 
   const { data, error } = await supabase.rpc("accept_organization_invitation", { p_token: parsed.data.token });
   if (error || !data) {
-    const message = error?.message.includes("Confirme seu e-mail") ? "Confirme seu e-mail antes de aceitar o convite."
+    const message = error?.message.includes("Limite de usuários") ? "Esta empresa atingiu o limite de usuários ativos do plano."
+      : error?.message.includes("Confirme seu e-mail") ? "Confirme seu e-mail antes de aceitar o convite."
       : error?.message.includes("mesmo e-mail") ? "Entre com o mesmo e-mail que recebeu o convite."
       : error?.message.includes("expirado") ? "Este convite expirou. Solicite um novo link."
       : "Este convite é inválido ou já foi utilizado.";

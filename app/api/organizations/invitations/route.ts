@@ -44,7 +44,12 @@ export async function POST(request: Request) {
     p_email: parsed.data.email,
     p_role: parsed.data.role,
   });
-  if (error || !data) return Response.json({ error: "Não foi possível criar o convite." }, { status: 500 });
+  if (error || !data) {
+    if (error?.message.includes("Limite de usuários")) {
+      return Response.json({ error: error.message }, { status: 403 });
+    }
+    return Response.json({ error: "Não foi possível criar o convite." }, { status: 500 });
+  }
   return Response.json({ invitation: data }, { status: 201 });
 }
 

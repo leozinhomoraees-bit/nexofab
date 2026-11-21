@@ -1,5 +1,6 @@
 import { getManagementAccess } from "@/lib/management-auth";
 import { getOrganizationSubscriptionSummary, type BillingPlanRecord } from "@/lib/billing";
+import { getAsaasEnvironment, isAsaasConfigured, isValidCpfOrCnpjLength } from "@/lib/asaas";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export async function GET() {
   if ("response" in access) return access.response;
 
   const isAdmin = access.role === "admin";
-  const [{ record, summary }, plansResult, membersResult, auditResult] = await Promise.all([
+  const [{ record, summary }, plansResult, membersResult, auditResult, companyResult] = await Promise.all([
     getOrganizationSubscriptionSummary(access.supabase, access.organizationId),
     access.supabase
       .from("plans")
@@ -31,6 +32,13 @@ export async function GET() {
         .order("created_at", { ascending: false })
         .limit(15)
       : Promise.resolve({ data: [] }),
+    isAdmin
+      ? access.supabase
+        .from("organizations")
+        .select("document, email")
+        .eq("id", access.organizationId)
+        .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   const plans = (plansResult.data ?? []) as BillingPlanRecord[];
@@ -43,13 +51,18 @@ export async function GET() {
     plans: isAdmin ? plans : [],
     usage: {
       activeMembers: membersResult.count ?? null,
-      maxUsers: currentPlan?.entitlements?.max_users ?? null,
+      maxUsers: currentPlan?.entitlements?.max_users ?? 10,
+    },
+    companyReady: {
+      hasDocument: isValidCpfOrCnpjLength(companyResult.data?.document),
+      hasEmail: Boolean(companyResult.data?.email),
     },
     auditLogs: isAdmin ? (auditResult.data ?? []) : [],
     provider: {
       id: "asaas",
       name: "Asaas",
-      checkoutEnabled: false,
+      environment: getAsaasEnvironment(),
+      checkoutEnabled: isAsaasConfigured(),
       paymentMethods: ["PIX", "Boleto bancário", "Cartão de crédito"],
     },
   });
