@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CalendarClock, CheckCircle2, CreditCard, ExternalLink, History, LoaderCircle, RefreshCw, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, Barcode, CalendarClock, CheckCircle2, CreditCard, ExternalLink, History, LoaderCircle, QrCode, RefreshCw, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { BillingCycle, BillingPlanRecord, SubscriptionAccessSummary } from "@/lib/billing";
+
+type CheckoutBillingType = "PIX" | "CREDIT_CARD" | "BOLETO";
 
 type AuditLog = {
   id: string;
@@ -60,9 +62,16 @@ function formatDate(iso: string | null) {
   return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+const billingMethodOptions: Array<{ id: CheckoutBillingType; label: string; hint: string }> = [
+  { id: "PIX", label: "PIX", hint: "QR Code imediato" },
+  { id: "CREDIT_CARD", label: "Cartão de crédito", hint: "Renovação automática" },
+  { id: "BOLETO", label: "Boleto bancário", hint: "Compensação em até 2 dias" },
+];
+
 export function BillingPanel() {
   const [data, setData] = useState<BillingPayload | null>(null);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>("quarterly");
+  const [selectedBillingType, setSelectedBillingType] = useState<CheckoutBillingType>("PIX");
   const [loading, setLoading] = useState(true);
   const [submittingPlanId, setSubmittingPlanId] = useState<string | null>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
@@ -98,7 +107,7 @@ export function BillingPanel() {
       const response = await fetch("/api/gestao/assinatura/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId, billingType: "UNDEFINED" }),
+        body: JSON.stringify({ planId, billingType: selectedBillingType }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Não foi possível gerar a cobrança no Asaas.");
@@ -237,10 +246,32 @@ export function BillingPanel() {
           <p className="billing-cycle-note">
             <Sparkles />
             <span>
-              <strong>{cycleLabels[selectedCycle]}:</strong> {cycleDescriptions[selectedCycle]} Pagamento seguro via{" "}
-              <strong>{data?.provider.name ?? "Asaas"}</strong>: {(data?.provider.paymentMethods ?? ["PIX", "Boleto bancário", "Cartão de crédito"]).join(", ")}.
+              <strong>{cycleLabels[selectedCycle]}:</strong> {cycleDescriptions[selectedCycle]} Escolha abaixo como deseja pagar via{" "}
+              <strong>{data?.provider.name ?? "Asaas"}</strong>.
             </span>
           </p>
+
+          <div className="billing-method-picker" role="radiogroup" aria-label="Forma de pagamento">
+            {billingMethodOptions.map((option) => {
+              const active = selectedBillingType === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  className={active ? "active" : ""}
+                  onClick={() => setSelectedBillingType(option.id)}
+                >
+                  {option.id === "PIX" ? <QrCode /> : option.id === "CREDIT_CARD" ? <CreditCard /> : <Barcode />}
+                  <span>
+                    <b>{option.label}</b>
+                    <small>{option.hint}</small>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
           {plansForCycle.length > 0 ? (
             <div className="billing-plan-grid">
@@ -274,7 +305,7 @@ export function BillingPanel() {
                       {isSubmitting
                         ? "Gerando fatura..."
                         : data?.provider.checkoutEnabled
-                          ? "Assinar com Asaas"
+                          ? `Assinar com ${selectedBillingType === "PIX" ? "PIX" : selectedBillingType === "CREDIT_CARD" ? "Cartão" : "Boleto"}`
                           : "Configure ASAAS_API_KEY no servidor"}
                     </Button>
                     {activeCheckoutUrl && (

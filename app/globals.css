@@ -617,6 +617,15 @@ main.min-h-screen, main.min-h-screen * { font-family:"Sora",sans-serif; }
 .billing-plans-body { padding:18px 20px; display:grid; gap:16px; }
 .billing-cycle-note { margin:0; padding:12px 14px; display:flex; align-items:center; gap:9px; border:1px solid #dce8e6; border-radius:9px; background:#f8fbfa; color:#335358; font-size:9px; line-height:1.5; }
 .billing-cycle-note svg { width:16px; flex:0 0 auto; color:#16988e; }
+.billing-method-picker { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.billing-method-picker button { padding:12px 14px; display:flex; align-items:center; gap:10px; text-align:left; border:1px solid #d5e2e2; border-radius:10px; background:#fff; color:#2b474c; cursor:pointer; transition:border-color .18s ease,background .18s ease; }
+.billing-method-picker button svg { width:18px; flex:0 0 auto; color:#5e777b; }
+.billing-method-picker button span { display:grid; gap:2px; }
+.billing-method-picker button b { font-size:10px; color:#173137; }
+.billing-method-picker button small { font-size:8px; color:#6f8387; }
+.billing-method-picker button.active { border-color:#16988e; background:#eef9f7; box-shadow:0 0 0 1px #16988e inset; }
+.billing-method-picker button.active svg { color:#0e7a70; }
+@media(max-width:700px){.billing-method-picker{grid-template-columns:1fr}}
 .billing-plan-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
 .billing-plan-option { padding:18px; display:grid; gap:10px; border:1px solid #dce5e5; border-radius:11px; background:#fff; }
 .billing-plan-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
