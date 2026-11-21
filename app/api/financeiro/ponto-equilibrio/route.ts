@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { getManagementAccess } from "@/lib/management-auth";
 import { effectivePaidAmount, historicalContributionProjection, recurringValue } from "@/lib/break-even-projection";
 
 export const dynamic = "force-dynamic";
@@ -16,27 +16,9 @@ const financialMonthSchema = z.object({
   businessDays: z.coerce.number().int().min(1).max(31),
 });
 
-async function getFinanceUser() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Acesso não autorizado", status: 401 as const };
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, active")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (!profile?.active || !["admin", "financeiro"].includes(profile.role)) {
-    return { error: "Seu perfil não possui acesso financeiro", status: 403 as const };
-  }
-
-  return { supabase, user };
-}
-
 export async function GET(request: Request) {
-  const access = await getFinanceUser();
-  if ("error" in access) return Response.json({ error: access.error }, { status: access.status });
+  const access = await getManagementAccess(["admin", "financeiro"]);
+  if ("response" in access) return access.response;
 
   const month = new URL(request.url).searchParams.get("month") ?? "";
   if (!monthPattern.test(month)) return Response.json({ error: "Competência inválida" }, { status: 400 });
@@ -129,8 +111,8 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const access = await getFinanceUser();
-  if ("error" in access) return Response.json({ error: access.error }, { status: access.status });
+  const access = await getManagementAccess(["admin", "financeiro"], { requireActiveSubscription: true });
+  if ("response" in access) return access.response;
 
   const parsed = financialMonthSchema.safeParse(await request.json());
   if (!parsed.success) {
@@ -141,6 +123,7 @@ export async function PUT(request: Request) {
   const { data, error } = await access.supabase
     .from("financial_months")
     .upsert({
+      organization_id: access.organizationId,
       competence_month: `${input.month}-01`,
       gross_revenue: input.otherRevenue,
       fixed_costs: input.otherFixedCosts,
@@ -150,7 +133,7 @@ export async function PUT(request: Request) {
       business_days: input.businessDays,
       created_by: access.user.id,
       updated_by: access.user.id,
-    }, { onConflict: "competence_month" })
+    }, { onConflict: "organization_id,competence_month" })
     .select("updated_at")
     .single();
 

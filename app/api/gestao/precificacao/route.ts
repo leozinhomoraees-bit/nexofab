@@ -296,7 +296,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const access = await getManagementAccess(["admin", "estoque", "producao", "comercial"]);
+  const access = await getManagementAccess(["admin", "estoque", "producao", "comercial"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = createSchema.safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: validationFailure(parsed.error) }, { status: 400 });
@@ -359,7 +359,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const access = await getManagementAccess(["admin", "estoque", "producao", "comercial"]);
+  const access = await getManagementAccess(["admin", "estoque", "producao", "comercial"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = updateSchema.safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: validationFailure(parsed.error) }, { status: 400 });
@@ -415,7 +415,7 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const access = await getManagementAccess(["admin", "estoque", "producao", "comercial"]);
+  const access = await getManagementAccess(["admin", "estoque", "producao", "comercial"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = deleteSchema.safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: "Item inválido." }, { status: 400 });

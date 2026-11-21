@@ -13,7 +13,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const access = await getManagementAccess(["admin", "estoque"]);
+  const access = await getManagementAccess(["admin", "estoque"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = itemSchema.safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: "Confira os dados do item." }, { status: 400 });
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const access = await getManagementAccess(["admin", "estoque"]);
+  const access = await getManagementAccess(["admin", "estoque"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = adjustmentSchema.safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: "Ajuste de estoque inválido." }, { status: 400 });

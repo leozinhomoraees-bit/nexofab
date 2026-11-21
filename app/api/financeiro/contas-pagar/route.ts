@@ -68,7 +68,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const access = await getManagementAccess(["admin", "financeiro"]);
+  const access = await getManagementAccess(["admin", "financeiro"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = payableSchema.safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: parsed.error.issues[0]?.message ?? "Confira os dados da conta." }, { status: 400 });
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const access = await getManagementAccess(["admin", "financeiro"]);
+  const access = await getManagementAccess(["admin", "financeiro"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = actionSchema.safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: parsed.error.issues[0]?.message ?? "Ação financeira inválida." }, { status: 400 });

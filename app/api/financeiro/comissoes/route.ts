@@ -137,7 +137,7 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const access = await getManagementAccess(["admin", "financeiro", "comercial"]);
+  const access = await getManagementAccess(["admin", "financeiro", "comercial"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = correctionSchema.safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: parsed.error.issues[0]?.message ?? "Percentuais inválidos." }, { status: 400 });

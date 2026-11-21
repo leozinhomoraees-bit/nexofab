@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 const schema = z.object({ paymentId: z.string().uuid() });
 
 export async function POST(request: Request) {
-  const access = await getManagementAccess(["admin", "financeiro"]);
+  const access = await getManagementAccess(["admin", "financeiro"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: "Pagamento inválido." }, { status: 400 });

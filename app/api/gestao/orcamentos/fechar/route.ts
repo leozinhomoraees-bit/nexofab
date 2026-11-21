@@ -17,7 +17,7 @@ const closeSchema = z.object({
 }).refine((data) => data.deposit <= data.totalValue, { message: "A entrada não pode superar o valor total.", path: ["deposit"] });
 
 export async function POST(request: Request) {
-  const access = await getManagementAccess(["admin", "comercial", "financeiro"]);
+  const access = await getManagementAccess(["admin", "comercial", "financeiro"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = closeSchema.safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: parsed.error.issues[0]?.message ?? "Confira os dados do fechamento." }, { status: 400 });

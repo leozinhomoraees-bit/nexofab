@@ -10,7 +10,7 @@ function safeName(value: string) {
 }
 
 export async function POST(request: Request) {
-  const access = await getManagementAccess(["admin", "financeiro"]);
+  const access = await getManagementAccess(["admin", "financeiro"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const form = await request.formData();
   const file = form.get("file");

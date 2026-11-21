@@ -64,7 +64,7 @@ export function QuoteForm() {
       </div>}
       {step === 3 && <div className="quote-fields">
         <label>Nome<Input name="customerName" required autoComplete="name" /></label><label>Empresa<Input name="company" autoComplete="organization" /></label>
-        <label>WhatsApp<Input name="phone" required type="tel" autoComplete="tel" placeholder="(43) 99999-9999" /></label><label>E-mail<Input name="email" type="email" autoComplete="email" /></label>
+        <label>WhatsApp<Input name="phone" required type="tel" autoComplete="tel" placeholder="(00) 90000-0000" /></label><label>E-mail<Input name="email" type="email" autoComplete="email" /></label>
         <p className="wide form-note">Ao enviar, você autoriza nosso contato sobre este orçamento. Nenhum pagamento será realizado nesta etapa.</p>
       </div>}
       {status === "error" && <p className="form-error" role="alert">Não conseguimos salvar agora. Confira os dados e tente novamente.</p>}

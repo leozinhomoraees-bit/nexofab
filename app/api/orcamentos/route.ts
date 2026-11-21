@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { getManagementAccess } from "@/lib/management-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -159,9 +160,9 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return Response.json({ error: "Acesso não autorizado" }, { status: 401 });
+  const access = await getManagementAccess(undefined, { requireActiveSubscription: true });
+  if ("response" in access) return access.response;
+  const supabase = access.supabase;
   const body = await request.json();
   const revalidation = quoteRevalidationSchema.safeParse(body);
   if (revalidation.success) {
@@ -186,9 +187,9 @@ export async function PATCH(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return Response.json({ error: "Acesso não autorizado" }, { status: 401 });
+  const access = await getManagementAccess(["admin", "comercial"], { requireActiveSubscription: true });
+  if ("response" in access) return access.response;
+  const supabase = access.supabase;
   const payload = quoteUpdateSchema.safeParse(await request.json());
   if (!payload.success) return Response.json({ error: quoteValidationMessage(payload.error), validationIssues: payload.error.issues }, { status: 400 });
   const body = payload.data;
@@ -221,7 +222,9 @@ export async function POST(request: Request) {
     if (!user) {
       return Response.json({ error: "O portal público será habilitado depois que a empresa for identificada com segurança." }, { status: 503 });
     }
-    const database = sessionClient;
+    const access = await getManagementAccess(undefined, { requireActiveSubscription: true });
+    if ("response" in access) return access.response;
+    const database = access.supabase;
     const itemSubtotal = selectableSubtotal(body.items);
     const subtotal = body.items.length ? itemSubtotal : 0;
     const estimatedValue = Math.max(0, subtotal + body.freight - body.discount);

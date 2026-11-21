@@ -109,12 +109,32 @@ export async function GET() {
     const grouped = (artworkApprovals ?? []).reduce((map, item) => { const current = map.get(item.production_order_id) ?? []; current.push(item); map.set(item.production_order_id, current); return map; }, new Map<string, NonNullable<typeof artworkApprovals>>());
     for (const row of rows) row.production_artwork_approvals = grouped.get(String(row.id)) ?? [];
   }
-  const { data: staff } = await access.supabase.from("profiles").select("id, full_name, role").eq("active", true).in("role", ["admin", "producao"]).order("full_name");
-  return Response.json({ orders: rows, staff: staff ?? [], advancedControl: !detailed.error });
+  const [{ data: members }, { data: profiles }] = await Promise.all([
+    access.supabase
+      .from("organization_members")
+      .select("user_id, role")
+      .eq("organization_id", access.organizationId)
+      .eq("status", "active")
+      .in("role", ["owner", "admin", "producao"]),
+    access.supabase
+      .from("profiles")
+      .select("id, full_name")
+      .eq("active", true)
+      .order("full_name"),
+  ]);
+  const roleByUser = new Map((members ?? []).map((member) => [member.user_id, member.role === "owner" ? "admin" : member.role]));
+  const staff = (profiles ?? [])
+    .filter((profile) => !roleByUser.size || roleByUser.has(profile.id))
+    .map((profile) => ({
+      id: profile.id,
+      full_name: profile.full_name,
+      role: roleByUser.get(profile.id) ?? "producao",
+    }));
+  return Response.json({ orders: rows, staff, advancedControl: !detailed.error });
 }
 
 export async function POST(request: Request) {
-  const access = await getManagementAccess(["admin", "producao", "financeiro"]);
+  const access = await getManagementAccess(["admin", "producao", "financeiro"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = actualEntrySchema.safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: parsed.error.issues[0]?.message ?? "Lançamento real inválido." }, { status: 400 });
@@ -125,7 +145,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const access = await getManagementAccess(["admin", "producao"]);
+  const access = await getManagementAccess(["admin", "producao"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = stageSchema.safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: parsed.error.issues[0]?.message ?? "Alteração inválida." }, { status: 400 });

@@ -3,7 +3,7 @@ import { getManagementAccess } from "@/lib/management-auth";
 const allowedTypes = new Set(["image/png", "image/jpeg", "image/webp", "application/pdf"]);
 
 export async function POST(request: Request) {
-  const access = await getManagementAccess(["admin", "producao", "comercial"]);
+  const access = await getManagementAccess(["admin", "producao", "comercial"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const form = await request.formData();
   const orderId = String(form.get("orderId") ?? "");

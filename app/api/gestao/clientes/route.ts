@@ -69,7 +69,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const access = await getManagementAccess(["admin", "comercial"]);
+  const access = await getManagementAccess(["admin", "comercial"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = customerSchema.safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: "Confira os dados obrigatórios e o formato do e-mail." }, { status: 400 });
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const access = await getManagementAccess(["admin", "comercial"]);
+  const access = await getManagementAccess(["admin", "comercial"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = updateSchema.safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: "Confira os dados obrigatórios e o formato do e-mail." }, { status: 400 });

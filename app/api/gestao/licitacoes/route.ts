@@ -27,7 +27,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const access = await getManagementAccess(["admin", "comercial"]);
+  const access = await getManagementAccess(["admin", "comercial"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = itemSchema.safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: parsed.error.issues[0]?.message ?? "Confira os dados do item." }, { status: 400 });
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const access = await getManagementAccess(["admin", "comercial"]);
+  const access = await getManagementAccess(["admin", "comercial"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = itemSchema.safeParse(await request.json());
   if (!parsed.success || !parsed.data.id) return Response.json({ error: parsed.success ? "Item inválido." : parsed.error.issues[0]?.message }, { status: 400 });
@@ -47,7 +47,7 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const access = await getManagementAccess(["admin", "comercial"]);
+  const access = await getManagementAccess(["admin", "comercial"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const id = new URL(request.url).searchParams.get("id");
   if (!id || !z.string().uuid().safeParse(id).success) return Response.json({ error: "Item inválido." }, { status: 400 });

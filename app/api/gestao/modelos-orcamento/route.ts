@@ -21,7 +21,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const access = await getManagementAccess(["admin", "comercial"]);
+  const access = await getManagementAccess(["admin", "comercial"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = templateSchema.safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: parsed.error.issues[0]?.message ?? "Confira os dados do modelo." }, { status: 400 });
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const access = await getManagementAccess(["admin", "comercial"]);
+  const access = await getManagementAccess(["admin", "comercial"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const parsed = z.object({ id: z.string().uuid() }).safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: "Modelo inválido." }, { status: 400 });

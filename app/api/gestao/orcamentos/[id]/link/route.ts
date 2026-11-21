@@ -4,7 +4,7 @@ import { createQuoteToken, hashQuoteToken } from "@/lib/quote-link";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const access = await getManagementAccess();
+    const access = await getManagementAccess(undefined, { requireActiveSubscription: true });
     if ("response" in access) return access.response;
     const parsed = z.string().uuid().safeParse((await params).id);
     if (!parsed.success) return Response.json({ error: "Orçamento inválido." }, { status: 400 });
