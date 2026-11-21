@@ -657,6 +657,8 @@ export function LandingExperience() {
             <a href="#produto">Sistema</a>
             <a href="#modulos">Módulos</a>
             <a href="#planos">Planos</a>
+            <Link href="/termos">Termos</Link>
+            <Link href="/privacidade">Privacidade</Link>
             <Link href="/login">Entrar</Link>
             <Link href="/cadastro">Criar conta</Link>
           </div>

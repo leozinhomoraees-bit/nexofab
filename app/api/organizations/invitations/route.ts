@@ -26,6 +26,8 @@ export async function GET() {
   const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
 
   return Response.json({
+    currentUserId: access.user.id,
+    maxUsers: 10,
     members: (memberships ?? []).map((membership) => ({
       ...membership,
       full_name: profileById.get(membership.user_id)?.full_name ?? "Usuário",

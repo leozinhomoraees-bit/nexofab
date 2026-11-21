@@ -654,3 +654,6 @@ main.min-h-screen, main.min-h-screen * { font-family:"Sora",sans-serif; }
 .saas-included-list svg { flex:0 0 auto; margin-top:2px; color:#c6f054; }
 .saas-final-cta { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
 @media(max-width:920px){.saas-pricing-grid,.saas-included-list{grid-template-columns:1fr}.nav-actions{gap:10px}}
+.team-member-controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.team-member-controls select { min-height:32px; padding:0 8px; border:1px solid #d5e2e2; border-radius:7px; background:#fff; color:#233d42; font-size:9px; font-weight:700; }
+.team-list article.member-suspended { opacity:.68; background:#fafbfc; }

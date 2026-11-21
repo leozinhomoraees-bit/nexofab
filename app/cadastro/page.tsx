@@ -161,6 +161,12 @@ export default function SignupPage() {
               >
                 {loading ? "Criando conta..." : "Começar 7 dias grátis"}
               </Button>
+              <p className="text-center text-xs leading-relaxed text-white/50">
+                Ao continuar, você concorda com os{" "}
+                <Link href="/termos" className="text-white/75 underline hover:text-white">Termos de Uso</Link>{" "}
+                e a{" "}
+                <Link href="/privacidade" className="text-white/75 underline hover:text-white">Política de Privacidade</Link>.
+              </p>
             </form>
             <p className="mt-6 text-center text-sm text-white/60">
               Já possui conta?{" "}
