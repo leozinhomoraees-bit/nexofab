@@ -608,7 +608,10 @@ main.min-h-screen, main.min-h-screen * { font-family:"Sora",sans-serif; }
 .billing-alert b { display:block; font-size:11px; margin-bottom:3px; }
 .billing-alert p { margin:0; font-size:9px; line-height:1.5; }
 .billing-summary { margin-bottom:0; }
-.billing-cycle-tabs { display:inline-flex; padding:4px; gap:4px; border:1px solid #d5e2e2; border-radius:9px; background:#fff; }
+.billing-cycle-tabs,.team-card>header .billing-cycle-tabs { display:inline-flex; align-items:center; padding:4px; gap:4px; border:1px solid #d5e2e2; border-radius:9px; background:#fff; }
+.billing-checkout-ready { padding:14px 18px; display:flex; align-items:center; justify-content:space-between; gap:14px; border:1px solid #9fd7cf; border-radius:11px; background:#e8f7f4; color:#0f5851; font-size:10px; font-weight:700; }
+.billing-checkout-ready>div { display:flex; align-items:center; gap:9px; }
+.billing-checkout-ready>div svg { width:18px; flex:0 0 auto; color:#0e7a70; }
 .billing-cycle-tabs button { padding:7px 13px; border:0; border-radius:6px; background:transparent; color:#526b6f; font-size:9px; font-weight:800; cursor:pointer; }
 .billing-cycle-tabs button.active { background:#153c43; color:#fff; }
 .billing-plans-body { padding:18px 20px; display:grid; gap:16px; }
@@ -627,4 +630,4 @@ main.min-h-screen, main.min-h-screen * { font-family:"Sora",sans-serif; }
 .billing-empty-plans svg { width:20px; flex:0 0 auto; color:#16988e; margin-top:2px; }
 .billing-empty-plans b { display:block; font-size:11px; margin-bottom:4px; }
 .billing-empty-plans p { margin:0; color:#5a7074; font-size:9px; line-height:1.6; }
-@media(max-width:700px){.billing-banner{flex-direction:column;align-items:flex-start}.billing-plans-card>header{flex-direction:column;align-items:flex-start;gap:12px}}
+@media(max-width:700px){.billing-banner,.billing-checkout-ready{flex-direction:column;align-items:flex-start}.billing-plans-card>header{flex-direction:column;align-items:flex-start;gap:12px}}

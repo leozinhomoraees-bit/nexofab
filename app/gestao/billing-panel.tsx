@@ -104,7 +104,7 @@ export function BillingPanel() {
       if (!response.ok) throw new Error(payload.error || "Não foi possível gerar a cobrança no Asaas.");
       if (payload.checkoutUrl) {
         setCheckoutUrl(payload.checkoutUrl as string);
-        setMessage("Fatura criada no Asaas! Abra o link abaixo para concluir o pagamento por PIX, boleto ou cartão.");
+        setMessage("Fatura criada no Asaas! Clique no botão ao lado para concluir o pagamento por PIX, boleto ou cartão.");
       } else {
         setMessage("Assinatura criada no Asaas. Aguarde a emissão da primeira fatura ou clique em Atualizar.");
       }
@@ -149,7 +149,22 @@ export function BillingPanel() {
       </header>
 
       {error && <div className="company-settings-message error">{error}</div>}
-      {message && <div className="company-settings-message success">{message}</div>}
+      {message && (
+        <div className="billing-checkout-ready">
+          <div>
+            <CheckCircle2 />
+            <span>{message}</span>
+          </div>
+          {activeCheckoutUrl && (
+            <Button asChild size="sm">
+              <a href={activeCheckoutUrl} target="_blank" rel="noreferrer">
+                <ExternalLink />
+                Abrir fatura no Asaas
+              </a>
+            </Button>
+          )}
+        </div>
+      )}
 
       {summary?.isReadOnly && (
         <div className="billing-alert blocked">
@@ -262,6 +277,14 @@ export function BillingPanel() {
                           ? "Assinar com Asaas"
                           : "Configure ASAAS_API_KEY no servidor"}
                     </Button>
+                    {activeCheckoutUrl && (
+                      <Button asChild variant="outline">
+                        <a href={activeCheckoutUrl} target="_blank" rel="noreferrer">
+                          <ExternalLink />
+                          Abrir fatura gerada no Asaas
+                        </a>
+                      </Button>
+                    )}
                   </article>
                 );
               })}
