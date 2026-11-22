@@ -14,7 +14,7 @@ SaaS multiempresa para orçamentos, precificação técnica, plano de corte, pro
 
 1. Crie um projeto Supabase exclusivo e vazio para o NexoFab (ative **Enable Data API** e **Enable RLS on new tables automatically**; mantenha **Grant API access to new tables automatically** desmarcado).
 2. Copie `.env.example` para `.env.local` e informe apenas a URL e a Publishable/anon key do projeto novo, além das variáveis server-side do Asaas Sandbox (`ASAAS_ENVIRONMENT=sandbox`, `ASAAS_API_KEY`, `ASAAS_WEBHOOK_TOKEN`).
-3. Aplique todas as 41 migrations em `supabase/migrations/`, em ordem cronológica.
+3. Aplique todas as 42 migrations em `supabase/migrations/`, em ordem cronológica.
 4. Registre no banco o hash SHA-256 do `ASAAS_WEBHOOK_TOKEN` na tabela privada `private.webhook_secrets`:
    ```sql
    insert into private.webhook_secrets (provider, token_hash)
@@ -49,11 +49,11 @@ npm audit --omit=dev
 supabase test db
 ```
 
-O teste SQL (`supabase/tests/tenant_isolation.sql`, 27 asserções pgTAP) deve ser executado apenas em um Supabase local descartável — nunca diretamente em produção.
+O teste SQL (`supabase/tests/tenant_isolation.sql`, 35 asserções pgTAP) deve ser executado apenas em um Supabase local descartável — nunca diretamente em produção.
 
 ## Modelo de segurança
 
-- Todas as tabelas operacionais possuem `organization_id NOT NULL`, `ENABLE ROW LEVEL SECURITY` e `FORCE ROW LEVEL SECURITY`.
+- Todas as tabelas operacionais possuem `organization_id NOT NULL`, `ENABLE ROW LEVEL SECURITY` e `FORCE ROW LEVEL SECURITY`, com **RBAC granular por departamento** (`owner`, `admin`, `financeiro`, `comercial`, `producao`, `estoque`) aplicado diretamente nas políticas RLS e nos buckets do Storage.
 - Todas as RPCs `SECURITY DEFINER` autenticadas validam `public.current_organization_id()` e `public.has_management_role(...)`, com `search_path` fixado.
 - Uploads no Storage exigem prefixo `<organization_id>/...`, bucket permitido e membership ativa.
 - Papéis pertencem a `organization_members`; `owner` não pode ser rebaixado por convite nem suspenso/alterado via gestão de equipe.

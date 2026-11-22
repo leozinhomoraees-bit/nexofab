@@ -264,11 +264,12 @@ export async function GET() {
     if (!current.error || !/cost_center_id/i.test(current.error.message ?? "")) return current;
     return access.supabase.from("pricing_machines").select(legacyMachineColumns).eq("active", true).order("name");
   })();
-  const fixedCostsPromise = (async () => {
+  const canViewFixedCosts = ["admin", "financeiro", "comercial"].includes(access.role);
+  const fixedCostsPromise = canViewFixedCosts ? (async () => {
     const current = await access.supabase.from("pricing_fixed_costs").select("id, name, monthly_amount, cost_center_id, notes, active, updated_at").eq("active", true).order("name");
     if (!current.error || !/cost_center_id/i.test(current.error.message ?? "")) return current;
     return access.supabase.from("pricing_fixed_costs").select("id, name, monthly_amount, notes, active, updated_at").eq("active", true).order("name");
-  })();
+  })() : Promise.resolve({ data: [], error: null });
   const costCentersPromise = (async () => {
     const result = await access.supabase.from("pricing_cost_centers").select("id, name, code, productive_hours_month, is_default, notes, active, updated_at").eq("active", true).order("name");
     if (result.error && ["42P01", "PGRST205"].includes(result.error.code ?? "")) return { data: [], error: null, setupRequired: true };

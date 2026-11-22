@@ -68,7 +68,12 @@ export function ManagementDashboard({ userName, initialSection = "visao-geral", 
 
   return <SidebarProvider><Sidebar className="management-sidebar" collapsible="icon">
     <SidebarHeader><Link href="/" className="dash-brand nexofab-wordmark" aria-label="NexoFab"><span>Nexo</span>Fab</Link></SidebarHeader>
-    <SidebarContent><SidebarGroup><SidebarGroupLabel>GESTÃO</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{menu.filter(([key]) => !["equipe", "assinatura"].includes(key) || ["owner", "admin"].includes(activeRole)).map(([key, Icon, label]) => <SidebarMenuItem key={label}><SidebarMenuButton isActive={section === key} tooltip={label} onClick={() => { setQuoteComposer(0); if (key === "financeiro") setFinanceSection("payables"); setSection(key); }}><Icon/><span>{label}</span></SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent>
+    <SidebarContent><SidebarGroup><SidebarGroupLabel>GESTÃO</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{menu.filter(([key]) => {
+      if (["equipe", "assinatura"].includes(key)) return ["owner", "admin"].includes(activeRole);
+      if (key === "relatorios") return ["owner", "admin", "financeiro"].includes(activeRole);
+      if (["financeiro", "licitacoes"].includes(key)) return ["owner", "admin", "financeiro", "comercial"].includes(activeRole);
+      return true;
+    }).map(([key, Icon, label]) => <SidebarMenuItem key={label}><SidebarMenuButton isActive={section === key} tooltip={label} onClick={() => { setQuoteComposer(0); if (key === "financeiro") setFinanceSection(["owner", "admin", "financeiro"].includes(activeRole) ? "payables" : "commissions"); setSection(key); }}><Icon/><span>{key === "financeiro" && activeRole === "comercial" ? "Comissões" : label}</span></SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent>
     <SidebarFooter><SidebarMenu><SidebarMenuItem><form action="/auth/signout" method="post"><SidebarMenuButton type="submit"><LogOut/><span>Sair</span></SidebarMenuButton></form></SidebarMenuItem></SidebarMenu></SidebarFooter>
   </Sidebar><SidebarInset className="dash-shell">
     <header className="dash-header"><SidebarTrigger/><label className="organization-switcher"><Building2/><select aria-label="Empresa ativa" value={activeOrganizationId} disabled={switchingOrganization} onChange={(event) => void switchOrganization(event.target.value)}>{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.trade_name}</option>)}</select></label><div className="dash-search"><Search/><Input aria-label="Buscar nesta área" placeholder="Buscar nesta área..." value={search} onChange={(event) => setSearch(event.target.value)}/></div><Button className="dash-new-quote" onClick={() => { setQuoteOpenRequest(null); setQuotePrefill(null); setSection("orcamentos"); setQuoteComposer((value) => value + 1); }}><Plus/>Novo orçamento</Button><NotificationCenter onOpenQuotes={(quoteId) => { setQuoteComposer(0); setQuotePrefill(null); if (quoteId) setQuoteOpenRequest({ id: quoteId, request: Date.now() }); setSection("orcamentos"); }} onOpenProduction={() => { setQuoteComposer(0); setSection("producao"); }}/><div className="user-chip"><span>{userName.slice(0, 1).toUpperCase()}</span><div><b>{userName.split("@")[0]}</b><small>{activeRole === "owner" ? "Proprietário" : activeRole}</small></div></div></header>
@@ -100,8 +105,8 @@ export function ManagementDashboard({ userName, initialSection = "visao-geral", 
       }}/>}
       {section === "estoque" && <InventoryPanel search={search}/>}
       {section === "clientes" && <CustomersPanel search={search}/>}
-      {section === "financeiro" && <FinancePanel key={financeSection} search={search} requestedSection={financeSection}/>}
-      {section === "relatorios" && <ReportsPanel/>}
+      {section === "financeiro" && ["owner", "admin", "financeiro", "comercial"].includes(activeRole) && <FinancePanel key={financeSection} search={search} requestedSection={financeSection} activeRole={activeRole}/>}
+      {section === "relatorios" && ["owner", "admin", "financeiro"].includes(activeRole) && <ReportsPanel/>}
       {section === "equipe" && ["owner", "admin"].includes(activeRole) && <TeamPanel/>}
       {section === "assinatura" && ["owner", "admin"].includes(activeRole) && <BillingPanel/>}
       {section === "empresa" && <CompanySettingsPanel/>}

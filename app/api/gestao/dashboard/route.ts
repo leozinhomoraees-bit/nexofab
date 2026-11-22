@@ -18,20 +18,25 @@ export async function GET() {
   const historyStartDate = new Date(`${monthStart}T12:00:00`);
   historyStartDate.setMonth(historyStartDate.getMonth() - 3);
   const historyStart = `${historyStartDate.getFullYear()}-${String(historyStartDate.getMonth() + 1).padStart(2, "0")}-01`;
+  const canViewFinance = ["admin", "financeiro"].includes(access.role);
+  const canViewReceivables = ["admin", "financeiro", "comercial"].includes(access.role);
+  const emptyList = Promise.resolve({ data: [] as never[], error: null });
+  const emptySingle = Promise.resolve({ data: null, error: null });
+
   const [payments, quotes, production, inventory, customers, financialMonth, paidPayables, openReceivables, previousFinancialMonth, pricingFixedCosts, historicalFinancialMonths, historicalPayments, historicalPayables] = await Promise.all([
-    access.supabase.from("quote_payments").select("amount").gte("received_on", monthStart).lt("received_on", monthEnd),
+    canViewFinance ? access.supabase.from("quote_payments").select("amount").gte("received_on", monthStart).lt("received_on", monthEnd) : emptyList,
     access.supabase.from("quotes").select("id, number, customer_name, service, status, estimated_value, valid_until, created_at, updated_at").order("created_at", { ascending: false }).limit(100),
     access.supabase.from("production_orders").select("id, number, title, stage, priority, due_at, created_at").not("stage", "in", "(concluido,cancelado)").order("created_at", { ascending: false }).limit(100),
     access.supabase.from("inventory_items").select("id, name, unit, current_quantity, minimum_quantity").eq("active", true),
     access.supabase.from("customers").select("id", { count: "exact", head: true }).eq("active", true),
-    access.supabase.from("financial_months").select("gross_revenue, fixed_costs, non_cash_costs, variable_costs, desired_profit, business_days").eq("competence_month", monthStart).maybeSingle(),
-    access.supabase.from("payable_installments").select("amount, paid_amount, interest_amount, fine_amount, discount_amount, payables(expense_categories(classification))").eq("status", "pago").gte("paid_on", monthStart).lt("paid_on", monthEnd),
-    access.supabase.from("receivable_installments").select("quote_id, amount, due_date, status, quotes!inner(id, status)").in("status", ["pendente", "agendado"]),
-    access.supabase.from("financial_months").select("competence_month, fixed_costs, non_cash_costs, desired_profit, business_days").lt("competence_month", monthStart).order("competence_month", { ascending: false }).limit(1).maybeSingle(),
-    access.supabase.from("pricing_fixed_costs").select("monthly_amount").eq("active", true),
-    access.supabase.from("financial_months").select("competence_month, gross_revenue, variable_costs").gte("competence_month", historyStart).lt("competence_month", monthStart),
-    access.supabase.from("quote_payments").select("amount, received_on").gte("received_on", historyStart).lt("received_on", monthStart),
-    access.supabase.from("payable_installments").select("amount, paid_amount, interest_amount, fine_amount, discount_amount, paid_on, payables(expense_categories(classification))").eq("status", "pago").gte("paid_on", historyStart).lt("paid_on", monthStart),
+    canViewFinance ? access.supabase.from("financial_months").select("gross_revenue, fixed_costs, non_cash_costs, variable_costs, desired_profit, business_days").eq("competence_month", monthStart).maybeSingle() : emptySingle,
+    canViewFinance ? access.supabase.from("payable_installments").select("amount, paid_amount, interest_amount, fine_amount, discount_amount, payables(expense_categories(classification))").eq("status", "pago").gte("paid_on", monthStart).lt("paid_on", monthEnd) : emptyList,
+    canViewReceivables ? access.supabase.from("receivable_installments").select("quote_id, amount, due_date, status, quotes!inner(id, status)").in("status", ["pendente", "agendado"]) : emptyList,
+    canViewFinance ? access.supabase.from("financial_months").select("competence_month, fixed_costs, non_cash_costs, desired_profit, business_days").lt("competence_month", monthStart).order("competence_month", { ascending: false }).limit(1).maybeSingle() : emptySingle,
+    canViewFinance ? access.supabase.from("pricing_fixed_costs").select("monthly_amount").eq("active", true) : emptyList,
+    canViewFinance ? access.supabase.from("financial_months").select("competence_month, gross_revenue, variable_costs").gte("competence_month", historyStart).lt("competence_month", monthStart) : emptyList,
+    canViewFinance ? access.supabase.from("quote_payments").select("amount, received_on").gte("received_on", historyStart).lt("received_on", monthStart) : emptyList,
+    canViewFinance ? access.supabase.from("payable_installments").select("amount, paid_amount, interest_amount, fine_amount, discount_amount, paid_on, payables(expense_categories(classification))").eq("status", "pago").gte("paid_on", historyStart).lt("paid_on", monthStart) : emptyList,
   ]);
 
   const error = payments.error || quotes.error || production.error || inventory.error || customers.error || financialMonth.error || paidPayables.error || openReceivables.error || previousFinancialMonth.error || pricingFixedCosts.error || historicalFinancialMonths.error || historicalPayments.error || historicalPayables.error;
@@ -103,6 +108,7 @@ export async function GET() {
   const economicBreakEven = contributionRate > 0 ? (fixedCosts + recurringProfit.value) / contributionRate : 0;
 
   return Response.json({ dashboard: {
+    permissions: { finance: canViewFinance, receivables: canViewReceivables },
     revenue: receivedRevenue,
     openQuotes: activeQuotes.length,
     openQuoteValue: activeQuotes.reduce((sum, quote) => sum + Number(quote.estimated_value ?? 0), 0),

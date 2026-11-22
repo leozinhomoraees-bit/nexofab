@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(27);
+select plan(35);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password,
@@ -289,6 +289,92 @@ select throws_ok(
   'P0001',
   'Limite de solicitações atingido. Aguarde alguns minutos e tente novamente.',
   'Rate limit bloqueia a sexta solicitação do mesmo IP na mesma hora'
+);
+reset role;
+
+-- 28 a 35: RBAC granular por departamento diretamente nas políticas RLS
+insert into auth.users (
+  id, instance_id, aud, role, email, encrypted_password,
+  email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+) values
+  ('40000000-0000-0000-0000-000000000004', null, 'authenticated', 'authenticated', 'producao-a@nexofab.test', '', now(), '{}'::jsonb, '{"full_name":"Producao A"}'::jsonb, now(), now()),
+  ('50000000-0000-0000-0000-000000000005', null, 'authenticated', 'authenticated', 'comercial-a@nexofab.test', '', now(), '{}'::jsonb, '{"full_name":"Comercial A"}'::jsonb, now(), now()),
+  ('60000000-0000-0000-0000-000000000006', null, 'authenticated', 'authenticated', 'financeiro-a@nexofab.test', '', now(), '{}'::jsonb, '{"full_name":"Financeiro A"}'::jsonb, now(), now());
+
+insert into public.organization_members(organization_id, user_id, role, status) values
+  ('a0000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000004', 'producao', 'active'),
+  ('a0000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000005', 'comercial', 'active'),
+  ('a0000000-0000-0000-0000-000000000001', '60000000-0000-0000-0000-000000000006', 'financeiro', 'active');
+
+update public.profiles
+set active_organization_id = 'a0000000-0000-0000-0000-000000000001'
+where id in (
+  '40000000-0000-0000-0000-000000000004',
+  '50000000-0000-0000-0000-000000000005',
+  '60000000-0000-0000-0000-000000000006'
+);
+
+select set_config('request.jwt.claims', '{"sub":"10000000-0000-0000-0000-000000000001","role":"authenticated","email":"owner-a@nexofab.test"}', true);
+set local role authenticated;
+insert into public.payables(id, description, total_amount)
+  values ('a3000000-0000-0000-0000-000000000001', 'Aluguel Galpão A', 3500);
+insert into public.pricing_fixed_costs(id, name, monthly_amount, active)
+  values ('a4000000-0000-0000-0000-000000000001', 'Folha Administrativa', 8000, true);
+reset role;
+
+select set_config('request.jwt.claims', '{"sub":"40000000-0000-0000-0000-000000000004","role":"authenticated","email":"producao-a@nexofab.test"}', true);
+set local role authenticated;
+select results_eq(
+  $$select count(*)::bigint from public.payables$$,
+  $$values (0::bigint)$$,
+  'Perfil producao não enxerga contas a pagar da própria empresa via RLS'
+);
+select results_eq(
+  $$select count(*)::bigint from public.pricing_fixed_costs$$,
+  $$values (0::bigint)$$,
+  'Perfil producao não enxerga custos fixos da própria empresa via RLS'
+);
+select throws_ok(
+  $$insert into public.payables(description, total_amount) values ('Conta indevida', 100)$$,
+  '42501',
+  null,
+  'Perfil producao é bloqueado ao inserir em payables via RLS'
+);
+select throws_ok(
+  $$insert into public.pricing_fixed_costs(name, monthly_amount, active) values ('Custo indevido', 500, true)$$,
+  '42501',
+  null,
+  'Perfil producao é bloqueado ao inserir em pricing_fixed_costs via RLS'
+);
+reset role;
+
+select set_config('request.jwt.claims', '{"sub":"50000000-0000-0000-0000-000000000005","role":"authenticated","email":"comercial-a@nexofab.test"}', true);
+set local role authenticated;
+select results_eq(
+  $$select count(*)::bigint from public.payables$$,
+  $$values (0::bigint)$$,
+  'Perfil comercial não enxerga contas a pagar da empresa via RLS'
+);
+select throws_ok(
+  $$insert into public.payables(description, total_amount) values ('Conta comercial', 200)$$,
+  '42501',
+  null,
+  'Perfil comercial é bloqueado ao inserir em payables via RLS'
+);
+reset role;
+
+select set_config('request.jwt.claims', '{"sub":"60000000-0000-0000-0000-000000000006","role":"authenticated","email":"financeiro-a@nexofab.test"}', true);
+set local role authenticated;
+select results_eq(
+  $$select count(*)::bigint from public.payables$$,
+  $$values (1::bigint)$$,
+  'Perfil financeiro enxerga normalmente as contas a pagar do seu tenant'
+);
+select throws_ok(
+  $$insert into public.production_orders(title, stage) values ('OS indevida', 'briefing')$$,
+  '42501',
+  null,
+  'Perfil financeiro é bloqueado ao criar ordem de produção diretamente via RLS'
 );
 reset role;
 

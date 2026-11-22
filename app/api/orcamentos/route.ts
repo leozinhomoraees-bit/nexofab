@@ -91,9 +91,10 @@ const quoteRevalidationSchema = z.object({
 const quoteUpdateSchema = quoteSchema.extend({ id: z.string().uuid() });
 
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return Response.json({ error: "Acesso não autorizado" }, { status: 401 });
+  const access = await getManagementAccess();
+  if ("response" in access) return access.response;
+  const supabase = access.supabase;
+  const canViewCommercialFinance = ["admin", "financeiro", "comercial"].includes(access.role);
 
   const { data, error } = await supabase
     .from("quotes")
@@ -102,10 +103,10 @@ export async function GET() {
     .limit(100);
   if (error) return Response.json({ error: "Não foi possível consultar os orçamentos." }, { status: 500 });
   const quoteIds = (data ?? []).map((quote) => quote.id);
-  const versionsResult = quoteIds.length
+  const versionsResult = quoteIds.length && canViewCommercialFinance
     ? await supabase.from("quote_approval_versions").select("id, quote_id, version, approval_source, approved_at").in("quote_id", quoteIds).order("version", { ascending: false })
     : { data: [] };
-  const receivablesResult = quoteIds.length
+  const receivablesResult = quoteIds.length && canViewCommercialFinance
     ? await supabase.from("receivable_installments").select("quote_id, amount, due_date, status").in("quote_id", quoteIds).in("status", ["pendente", "agendado"])
     : { data: [] };
   const versionsByQuote = new Map<string, Array<{ id: string; version: number; approval_source: string; approved_at: string }>>();
@@ -160,7 +161,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const access = await getManagementAccess(undefined, { requireActiveSubscription: true });
+  const access = await getManagementAccess(["admin", "comercial", "financeiro"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
   const supabase = access.supabase;
   const body = await request.json();
@@ -222,7 +223,7 @@ export async function POST(request: Request) {
     if (!user) {
       return Response.json({ error: "O portal público será habilitado depois que a empresa for identificada com segurança." }, { status: 503 });
     }
-    const access = await getManagementAccess(undefined, { requireActiveSubscription: true });
+    const access = await getManagementAccess(["admin", "comercial", "financeiro"], { requireActiveSubscription: true });
     if ("response" in access) return access.response;
     const database = access.supabase;
     const itemSubtotal = selectableSubtotal(body.items);
