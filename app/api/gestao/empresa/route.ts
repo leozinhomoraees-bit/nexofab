@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getManagementAccess } from "@/lib/management-auth";
+import { isValidPublicSlug } from "@/lib/public-portal";
 
 const companySchema = z.object({
   tradeName: z.string().trim().min(2).max(120),
@@ -18,6 +19,8 @@ const companySchema = z.object({
   addressState: z.string().trim().max(2).optional().default(""),
   addressZipCode: z.string().trim().max(20).optional().default(""),
   proposalFooter: z.string().trim().max(240).optional().default(""),
+  publicSlug: z.string().trim().max(60).optional().default(""),
+  publicPortalEnabled: z.boolean().optional().default(false),
 });
 
 export async function GET() {
@@ -34,6 +37,13 @@ export async function PATCH(request: Request) {
   const parsed = companySchema.safeParse(await request.json());
   if (!parsed.success) return Response.json({ error: "Revise os campos obrigatórios e o formato do e-mail." }, { status: 400 });
   const value = parsed.data;
+  const normalizedSlug = value.publicSlug.trim().toLowerCase();
+  if (value.publicPortalEnabled && !normalizedSlug) {
+    return Response.json({ error: "Defina um endereço público (slug) antes de ativar o portal." }, { status: 400 });
+  }
+  if (normalizedSlug && !isValidPublicSlug(normalizedSlug)) {
+    return Response.json({ error: "Use de 3 a 60 caracteres com letras minúsculas, números e hífens (sem palavras reservadas)." }, { status: 400 });
+  }
   const { data, error } = await access.supabase.from("organizations").update({
     trade_name: value.tradeName, legal_name: value.legalName || null, document: value.document || null,
     state_registration: value.stateRegistration || null, email: value.email || null, phone: value.phone || null,
@@ -42,8 +52,18 @@ export async function PATCH(request: Request) {
     address_district: value.addressDistrict || null, address_city: value.addressCity || null,
     address_state: value.addressState.toUpperCase() || null, address_zip_code: value.addressZipCode || null,
     proposal_footer: value.proposalFooter || null,
+    public_slug: normalizedSlug || null,
+    public_portal_enabled: value.publicPortalEnabled,
   }).eq("id", access.organizationId).select("*").single();
-  if (error) return Response.json({ error: "Não foi possível salvar os dados da empresa." }, { status: 500 });
+  if (error) {
+    if (error.code === "23505") {
+      return Response.json({ error: "Este endereço público já está em uso por outra empresa. Escolha outro." }, { status: 409 });
+    }
+    if (error.code === "23514") {
+      return Response.json({ error: "Endereço público inválido ou reservado." }, { status: 400 });
+    }
+    return Response.json({ error: "Não foi possível salvar os dados da empresa." }, { status: 500 });
+  }
   return Response.json({ company: data });
 }
 

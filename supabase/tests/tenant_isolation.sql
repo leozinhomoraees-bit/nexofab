@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(19);
+select plan(27);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password,
@@ -183,6 +183,112 @@ select throws_ok(
   'P0001',
   'Usuário não pertence a esta organização',
   'Membership suspensa é bloqueada em set_active_organization'
+);
+reset role;
+
+-- 20 a 27: Portal público por empresa (/p/<slug>), assinatura ativa, isolamento e rate limiting
+insert into public.organization_subscriptions (organization_id, status, provider, trial_ends_at) values
+  ('a0000000-0000-0000-0000-000000000001', 'trialing', 'asaas', now() + interval '7 days'),
+  ('b0000000-0000-0000-0000-000000000002', 'trialing', 'asaas', now() - interval '1 day')
+on conflict (organization_id) do update set
+  status = excluded.status,
+  trial_ends_at = excluded.trial_ends_at;
+
+select throws_ok(
+  $$update public.organizations set public_slug = 'gestao' where id = 'a0000000-0000-0000-0000-000000000001'$$,
+  '23514',
+  null,
+  'Slug reservado do sistema é bloqueado na tabela organizations'
+);
+
+update public.organizations
+set public_slug = 'tenant-a', public_portal_enabled = false, document = '12.345.678/0001-90'
+where id = 'a0000000-0000-0000-0000-000000000001';
+
+update public.organizations
+set public_slug = 'tenant-b', public_portal_enabled = true
+where id = 'b0000000-0000-0000-0000-000000000002';
+
+select set_config('request.jwt.claims', '{}', true);
+set local role anon;
+
+select results_eq(
+  $$select public.get_public_quote_portal('tenant-a') is null$$,
+  $$values (true)$$,
+  'Portal desativado retorna nulo para anon'
+);
+
+select results_eq(
+  $$select public.get_public_quote_portal('tenant-b') is null$$,
+  $$values (true)$$,
+  'Portal de empresa com assinatura expirada retorna nulo para anon'
+);
+
+reset role;
+update public.organizations
+set public_portal_enabled = true
+where id = 'a0000000-0000-0000-0000-000000000001';
+
+select set_config('request.jwt.claims', '{}', true);
+set local role anon;
+
+select results_eq(
+  $$select (public.get_public_quote_portal('tenant-a') ->> 'trade_name') = 'Tenant A'
+      and not (public.get_public_quote_portal('tenant-a') ? 'organization_id')
+      and not (public.get_public_quote_portal('tenant-a') ? 'document')$$,
+  $$values (true)$$,
+  'Portal ativo expõe somente branding público seguro sem organization_id ou CNPJ'
+);
+
+select throws_ok(
+  $$select public.submit_public_quote_lead(
+    'tenant-b', 'Lead Externo', '11999998888', 'Corte a laser',
+    null, null, null, 'A definir', null, 1,
+    repeat('c', 64)
+  )$$,
+  'P0001',
+  'Portal de orçamento indisponível',
+  'Submissão pública é bloqueada para tenant com assinatura expirada'
+);
+
+select lives_ok(
+  $$select public.submit_public_quote_lead(
+    'tenant-a', 'Lead Portal A', '11988887777', 'Router CNC',
+    'Empresa Lead', 'lead@exemplo.com', '1x2m', 'ACM', 'Fachada externa', 2,
+    repeat('d', 64)
+  )$$,
+  'Submissão pública anônima cria orçamento para tenant ativo'
+);
+
+reset role;
+
+select set_config('request.jwt.claims', '{"sub":"20000000-0000-0000-0000-000000000002","role":"authenticated","email":"owner-b@nexofab.test"}', true);
+set local role authenticated;
+select results_eq(
+  $$select (select count(*)::bigint from public.quotes where customer_name = 'Lead Portal A')
+      + (select count(*)::bigint from public.management_notifications where title like 'Novo pedido pelo portal%')$$,
+  $$values (0::bigint)$$,
+  'Tenant B não enxerga lead nem notificação criados no portal do Tenant A'
+);
+reset role;
+
+select set_config('request.jwt.claims', '{}', true);
+set local role anon;
+select throws_ok(
+  $$
+    do $rate$
+    begin
+      perform public.submit_public_quote_lead('tenant-a', 'Lead 2', '11988887777', 'Laser', null, null, null, 'MDF', null, 1, repeat('d', 64));
+      perform public.submit_public_quote_lead('tenant-a', 'Lead 3', '11988887777', 'Laser', null, null, null, 'MDF', null, 1, repeat('d', 64));
+      perform public.submit_public_quote_lead('tenant-a', 'Lead 4', '11988887777', 'Laser', null, null, null, 'MDF', null, 1, repeat('d', 64));
+      perform public.submit_public_quote_lead('tenant-a', 'Lead 5', '11988887777', 'Laser', null, null, null, 'MDF', null, 1, repeat('d', 64));
+      perform public.submit_public_quote_lead('tenant-a', 'Lead 6', '11988887777', 'Laser', null, null, null, 'MDF', null, 1, repeat('d', 64));
+    end
+    $rate$;
+  $$,
+  'P0001',
+  'Limite de solicitações atingido. Aguarde alguns minutos e tente novamente.',
+  'Rate limit bloqueia a sexta solicitação do mesmo IP na mesma hora'
 );
 reset role;
 
