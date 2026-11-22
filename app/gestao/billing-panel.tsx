@@ -18,6 +18,7 @@ type AuditLog = {
 
 type BillingPayload = {
   subscription: SubscriptionAccessSummary;
+  canCancelRenewal?: boolean;
   currentPlan: BillingPlanRecord | null;
   plans: BillingPlanRecord[];
   usage: { activeMembers: number | null; maxUsers: number | null };
@@ -49,6 +50,7 @@ const auditLabels: Record<string, string> = {
   trial_initialized_backfill: "Período de teste de 7 dias atribuído à organização",
   checkout_created: "Cobrança gerada no Asaas",
   subscription_activated: "Assinatura ativada via pagamento confirmado",
+  subscription_cancel_requested: "Cancelamento da renovação solicitado",
   payment_overdue: "Pagamento em atraso registrado",
   subscription_canceled: "Assinatura cancelada",
 };
@@ -74,6 +76,8 @@ export function BillingPanel() {
   const [selectedBillingType, setSelectedBillingType] = useState<CheckoutBillingType>("PIX");
   const [loading, setLoading] = useState(true);
   const [submittingPlanId, setSubmittingPlanId] = useState<string | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [canceling, setCanceling] = useState(false);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -125,6 +129,29 @@ export function BillingPanel() {
     }
   }
 
+  async function cancelRenewal() {
+    setCanceling(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/gestao/assinatura/cancelar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Não foi possível cancelar a renovação.");
+      setConfirmCancel(false);
+      setCheckoutUrl(null);
+      setMessage("Renovação cancelada com sucesso. Seu acesso segue liberado até o fim do período já pago.");
+      await load();
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setCanceling(false);
+    }
+  }
+
   const plansForCycle = useMemo(
     () => (data?.plans ?? []).filter((plan) => plan.billing_cycle === selectedCycle),
     [data, selectedCycle],
@@ -150,6 +177,11 @@ export function BillingPanel() {
               </a>
             </Button>
           )}
+          {data?.canCancelRenewal && !confirmCancel && (
+            <Button variant="outline" onClick={() => setConfirmCancel(true)}>
+              Cancelar renovação
+            </Button>
+          )}
           <Button variant="outline" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={loading ? "spin" : ""} />
             {loading ? "Carregando" : "Atualizar"}
@@ -172,6 +204,22 @@ export function BillingPanel() {
               </a>
             </Button>
           )}
+        </div>
+      )}
+
+      {confirmCancel && (
+        <div className="billing-banner warning">
+          <span>
+            <strong>Confirmar cancelamento da renovação?</strong> Nenhuma nova cobrança será gerada no Asaas e o acesso da empresa continuará liberado até o fim do período já pago.
+          </span>
+          <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+            <Button type="button" size="sm" variant="outline" disabled={canceling} onClick={() => setConfirmCancel(false)}>
+              Manter assinatura
+            </Button>
+            <Button type="button" size="sm" variant="destructive" disabled={canceling} onClick={() => void cancelRenewal()}>
+              {canceling ? "Cancelando..." : "Confirmar cancelamento"}
+            </Button>
+          </div>
         </div>
       )}
 

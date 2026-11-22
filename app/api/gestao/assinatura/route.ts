@@ -44,9 +44,18 @@ export async function GET() {
   const plans = (plansResult.data ?? []) as BillingPlanRecord[];
   const currentPlan = record?.plan_id ? plans.find((plan) => plan.id === record.plan_id) ?? null : null;
 
+  const { data: subProvider } = isAdmin
+    ? await access.supabase
+      .from("organization_subscriptions")
+      .select("provider_subscription_id")
+      .eq("organization_id", access.organizationId)
+      .maybeSingle()
+    : { data: null };
+
   return Response.json({
     subscription: summary,
     rawSubscription: isAdmin ? record : null,
+    canCancelRenewal: isAdmin && Boolean(subProvider?.provider_subscription_id) && !summary.cancelAtPeriodEnd,
     currentPlan,
     plans: isAdmin ? plans : [],
     usage: {

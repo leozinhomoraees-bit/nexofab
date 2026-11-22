@@ -47,6 +47,7 @@ export type SubscriptionAccessSummary = {
   billingCycle: BillingCycle | null;
   provider: string | null;
   checkoutUrl: string | null;
+  cancelAtPeriodEnd: boolean;
   label: string;
   tone: "ok" | "warning" | "blocked";
 };
@@ -77,6 +78,7 @@ export function evaluateSubscription(
       billingCycle: null,
       provider: "asaas",
       checkoutUrl: null,
+      cancelAtPeriodEnd: false,
       label: "Assinatura pendente",
       tone: "blocked",
     };
@@ -86,6 +88,7 @@ export function evaluateSubscription(
     const endsMs = subscription.current_period_ends_at ? Date.parse(subscription.current_period_ends_at) : null;
     const isStillValid = endsMs === null || Number.isNaN(endsMs) || endsMs > nowMs;
     const days = remainingDays(subscription.current_period_ends_at, nowMs);
+    const canceling = Boolean(subscription.cancel_at_period_end);
     return {
       status: "active",
       effectiveStatus: isStillValid ? "active" : "past_due",
@@ -97,8 +100,13 @@ export function evaluateSubscription(
       billingCycle: subscription.billing_cycle,
       provider: subscription.provider,
       checkoutUrl: subscription.provider_checkout_url,
-      label: isStillValid ? "Assinatura ativa" : "Renovação pendente",
-      tone: isStillValid ? "ok" : "blocked",
+      cancelAtPeriodEnd: canceling,
+      label: !isStillValid
+        ? "Renovação pendente"
+        : canceling
+          ? "Ativa até o fim do período (renovação cancelada)"
+          : "Assinatura ativa",
+      tone: !isStillValid ? "blocked" : canceling ? "warning" : "ok",
     };
   }
 
@@ -117,6 +125,7 @@ export function evaluateSubscription(
       billingCycle: subscription.billing_cycle,
       provider: subscription.provider,
       checkoutUrl: subscription.provider_checkout_url,
+      cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
       label: isTrialActive
         ? days === 1
           ? "Teste grátis · último dia"
@@ -141,6 +150,7 @@ export function evaluateSubscription(
       billingCycle: subscription.billing_cycle,
       provider: subscription.provider,
       checkoutUrl: subscription.provider_checkout_url,
+      cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
       label: inGrace ? "Pagamento em atraso (período de carência)" : "Pagamento pendente · modo leitura",
       tone: inGrace ? "warning" : "blocked",
     };
@@ -158,6 +168,7 @@ export function evaluateSubscription(
     billingCycle: subscription.billing_cycle,
     provider: subscription.provider,
     checkoutUrl: subscription.provider_checkout_url,
+    cancelAtPeriodEnd: true,
     label: canceled ? "Assinatura cancelada · modo leitura" : "Assinatura suspensa · modo leitura",
     tone: "blocked",
   };
