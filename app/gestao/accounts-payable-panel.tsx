@@ -1,9 +1,11 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Banknote, CalendarClock, Check, ChevronDown, CircleDollarSign, Clock3, Copy, FileCheck2, FileUp, Plus, ReceiptText, RefreshCw, Search, Store, UploadCloud, X } from "lucide-react";
+import { AlertTriangle, Banknote, CalendarClock, Check, ChevronDown, CircleDollarSign, Clock3, Copy, Download, FileCheck2, FileUp, FolderPlus, Plus, ReceiptText, RefreshCw, Search, Store, UploadCloud, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { downloadCsv } from "@/lib/csv-export";
+import { useToast } from "./toast-context";
 
 type Supplier = { id: string; legal_name: string; trade_name?: string | null; document?: string | null; default_payment_terms?: string | null; active: boolean };
 type Category = { id: string; name: string; classification: string; color?: string | null };
@@ -36,12 +38,15 @@ function buildInstallments(total: number, count: number, firstDue: string, frequ
 }
 
 export function AccountsPayablePanel({ search: globalSearch }: { search: string }) {
+  const { notify } = useToast();
   const [month, setMonth] = useState(currentMonth());
   const [data, setData] = useState<Data>({ installments: [], suppliers: [], categories: [], costCenters: [] });
   const [status, setStatus] = useState("todos");
   const [localSearch, setLocalSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [composer, setComposer] = useState(false);
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [catalogSaving, setCatalogSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [payment, setPayment] = useState<Installment | null>(null);
   const [installments, setInstallments] = useState<DraftInstallment[]>(buildInstallments(0, 1, today(), "mensal", "boleto"));
@@ -104,8 +109,55 @@ export function AccountsPayablePanel({ search: globalSearch }: { search: string 
     const body = { supplierId: String(form.get("supplierId") ?? ""), expenseCategoryId: String(form.get("expenseCategoryId") ?? ""), costCenterId: String(form.get("costCenterId") ?? ""), description: String(form.get("description") ?? ""), documentType: String(form.get("documentType") ?? "boleto"), documentNumber: String(form.get("documentNumber") ?? ""), purchaseOrder: String(form.get("purchaseOrder") ?? ""), issueDate: String(form.get("issueDate") ?? ""), competenceDate: String(form.get("competenceDate") ?? ""), totalAmount: total, recurring: form.get("recurring") === "on", recurrenceFrequency: String(form.get("frequency") ?? "mensal"), recurrenceEndDate: String(form.get("recurrenceEndDate") ?? ""), notes: String(form.get("notes") ?? ""), installments, financialDocumentId: importDraft?.documentId };
     const response = await fetch("/api/financeiro/contas-pagar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const payload = await response.json();
-    if (!response.ok) { setMessage(payload.error ?? "Não foi possível cadastrar a conta."); return; }
-    setComposer(false); setImportDraft(null); await load(); setMessage("Conta a pagar cadastrada com sucesso.");
+    if (!response.ok) { setMessage(payload.error ?? "Não foi possível cadastrar a conta."); notify(payload.error ?? "Não foi possível cadastrar a conta.", "error"); return; }
+    setComposer(false); setImportDraft(null); await load(); setMessage("Conta a pagar cadastrada com sucesso."); notify("Conta a pagar cadastrada com sucesso.");
+  }
+
+  async function createCatalogItem(entity: "category" | "costCenter", event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    setCatalogSaving(true);
+    try {
+      const body = entity === "category"
+        ? { entity, name: String(form.get("name") ?? ""), classification: String(form.get("classification") ?? "fixo") }
+        : { entity, name: String(form.get("name") ?? ""), code: String(form.get("code") ?? "") };
+      const response = await fetch("/api/financeiro/categorias", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Não foi possível salvar.");
+      formElement.reset();
+      await load();
+      notify(entity === "category" ? "Categoria financeira criada." : "Centro de custo criado.");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Não foi possível salvar.", "error");
+    } finally {
+      setCatalogSaving(false);
+    }
+  }
+
+  function exportPayablesCsv() {
+    if (!visible.length) {
+      notify("Nenhuma conta filtrada para exportar.", "info");
+      return;
+    }
+    downloadCsv(
+      `contas-a-pagar-${month}`,
+      ["Vencimento", "Parcela", "Status", "Descrição", "Fornecedor", "Categoria", "Centro de Custo", "Documento", "Forma", "Valor", "Pago em"],
+      visible.map((item) => [
+        brDate(item.due_date),
+        `${item.installment_number}/${item.payables.installment_count}`,
+        item.status === "pendente" && item.due_date < today() ? "vencido" : item.status,
+        item.payables.description,
+        item.payables.suppliers?.trade_name || item.payables.suppliers?.legal_name || "",
+        item.payables.expense_categories?.name || "",
+        item.payables.cost_centers?.name || "",
+        item.payables.document_number || "",
+        paymentLabels[item.payment_method] ?? item.payment_method,
+        Number(item.status === "pago" ? item.paid_amount ?? item.amount : item.amount),
+        item.paid_on ? brDate(item.paid_on) : "",
+      ]),
+    );
+    notify(`Exportadas ${visible.length} conta(s) em CSV.`);
   }
 
   async function analyzeDocument(event: FormEvent<HTMLFormElement>) {
@@ -156,7 +208,7 @@ export function AccountsPayablePanel({ search: globalSearch }: { search: string 
   }
 
   return <section className="payables-panel">
-    <div className="payables-toolbar"><div><small>CONTAS A PAGAR</small><h2>Compromissos financeiros</h2><p>Boletos, despesas recorrentes, fornecedores, parcelas e pagamentos.</p></div><div className="payables-actions"><label>Competência<Input type="month" value={month} onChange={(event) => { setLoading(true); setMonth(event.target.value); }}/></label><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw/>{loading ? "Atualizando" : "Atualizar"}</Button><Button variant="outline" onClick={() => { setImportResult(null); setSelectedFileName(""); setImportOpen(true); }}><FileUp/>Importar PDF/XML</Button><Button onClick={() => { setImportDraft(null); setInstallments(buildInstallments(0, 1, today(), "mensal", "boleto")); setComposer(true); }}><Plus/>Nova conta</Button></div></div>
+    <div className="payables-toolbar"><div><small>CONTAS A PAGAR</small><h2>Compromissos financeiros</h2><p>Boletos, despesas recorrentes, fornecedores, parcelas e pagamentos.</p></div><div className="payables-actions"><label>Competência<Input type="month" value={month} onChange={(event) => { setLoading(true); setMonth(event.target.value); }}/></label><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw/>{loading ? "Atualizando" : "Atualizar"}</Button><Button variant="outline" onClick={() => setCatalogOpen(true)}><FolderPlus/>Categorias</Button><Button variant="outline" onClick={exportPayablesCsv} disabled={!visible.length}><Download/>CSV</Button><Button variant="outline" onClick={() => { setImportResult(null); setSelectedFileName(""); setImportOpen(true); }}><FileUp/>Importar PDF/XML</Button><Button onClick={() => { setImportDraft(null); setInstallments(buildInstallments(0, 1, today(), "mensal", "boleto")); setComposer(true); }}><Plus/>Nova conta</Button></div></div>
     {message && <div className={message.includes("sucesso") ? "finance-message success" : "finance-message"}>{message.includes("sucesso") ? <Check/> : <AlertTriangle/>}{message}</div>}
     <div className="payables-kpis"><article><span><ReceiptText/>Em aberto</span><b>{currency.format(summary.open)}</b><small>{data.installments.filter((item) => !["pago", "cancelado"].includes(item.status)).length} parcela(s)</small></article><article className="danger"><span><AlertTriangle/>Vencido</span><b>{currency.format(summary.overdue)}</b><small>Exige atenção imediata</small></article><article className="warning"><span><Clock3/>Vence hoje</span><b>{currency.format(summary.today)}</b><small>Programar ou pagar</small></article><article className="success"><span><CircleDollarSign/>Pago no mês</span><b>{currency.format(summary.paid)}</b><small>Caixa realizado</small></article></div>
     <div className="payables-filters"><label><Search/><Input placeholder="Buscar fornecedor, conta ou documento" value={localSearch} onChange={(event) => setLocalSearch(event.target.value)}/></label><div>{["todos", "pendente", "agendado", "vencido", "pago", "cancelado"].map((item) => <button key={item} className={status === item ? "active" : ""} onClick={() => setStatus(item)}>{item === "todos" ? "Todos" : item}</button>)}</div></div>
@@ -166,6 +218,28 @@ export function AccountsPayablePanel({ search: globalSearch }: { search: string 
       {!loading && !visible.length && <div className="finance-empty"><ReceiptText/><b>Nenhuma conta encontrada</b><span>Cadastre uma conta ou altere os filtros desta competência.</span></div>}
     </div>
     {importOpen && <div className="finance-modal document-import-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeImporter(); }}><form className="document-importer" role="dialog" aria-modal="true" aria-labelledby="document-import-title" onSubmit={analyzeDocument} onMouseDown={(event) => event.stopPropagation()}><header><div><small>ENTRADA INTELIGENTE</small><h2 id="document-import-title">Importar documento financeiro</h2><p>Leia um boleto, nota fiscal ou fatura e revise tudo antes do lançamento.</p></div><button className="document-import-close" type="button" onClick={closeImporter} aria-label="Fechar importação"><X/><span>Fechar</span></button></header>{!importResult ? <div className="document-import-content"><label className="document-drop"><UploadCloud/><b>Selecione o PDF ou XML</b><span>O arquivo ficará privado e não será lançado sem sua confirmação.</span><Input name="file" type="file" accept=".pdf,.xml,application/pdf,application/xml,text/xml" required onChange={(event) => setSelectedFileName(event.target.files?.[0]?.name ?? "")}/><em>{selectedFileName || "Nenhum arquivo selecionado"}</em></label><div className="document-import-help"><span><b>PDF</b>Boletos e faturas com texto selecionável.</span><span><b>XML</b>NF-e e cobranças com maior precisão.</span><span><b>Segurança</b>Limite de 10 MB e bloqueio de duplicidade.</span></div></div> : <div className="extraction-review"><div className="extraction-score"><FileCheck2/><div><b>{importResult.fileName}</b><span>Confiança da leitura: {importResult.extracted.confidence}%</span></div><strong>{importResult.extracted.needsOcr ? "OCR necessário" : "Lido"}</strong></div><div className="extraction-fields"><span><small>Fornecedor</small><b>{importResult.extracted.supplierName || "Não identificado"}</b></span><span><small>CPF/CNPJ</small><b>{importResult.extracted.supplierDocument || "Não identificado"}</b></span><span><small>Documento</small><b>{importResult.extracted.documentNumber || "Não identificado"}</b></span><span><small>Vencimento</small><b>{brDate(importResult.extracted.dueDate)}</b></span><span><small>Valor</small><b>{importResult.extracted.totalAmount ? currency.format(importResult.extracted.totalAmount) : "Não identificado"}</b></span><span><small>Parcelas encontradas</small><b>{importResult.extracted.installments.length || 1}</b></span></div>{importResult.extracted.warnings.length > 0 && <div className="extraction-warnings"><AlertTriangle/>{importResult.extracted.warnings.join(" ")}</div>}</div>}<footer><button className="document-import-cancel" type="button" onClick={closeImporter}>Cancelar</button>{importResult ? <button className="document-import-submit" type="button" onClick={useImportedDocument}><Check/>Revisar e completar cadastro</button> : <button className="document-import-submit" type="submit" disabled={importing || !selectedFileName}><FileUp/>{importing ? "Lendo documento..." : "Analisar arquivo"}</button>}</footer></form></div>}
+    {catalogOpen && <div className="finance-modal" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCatalogOpen(false); }}>
+      <div className="payable-composer catalog-composer" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <header><div><small>ESTRUTURA FINANCEIRA</small><h2>Categorias e centros de custo</h2><p>Cadastre novas classificações para organizar suas contas a pagar e ponto de equilíbrio.</p></div><Button type="button" variant="ghost" size="icon" onClick={() => setCatalogOpen(false)}><X/></Button></header>
+        <div className="catalog-modal-grid">
+          <form onSubmit={(event) => void createCatalogItem("category", event)} className="catalog-modal-card">
+            <h3>Nova categoria de despesa</h3>
+            <label>Nome<Input name="name" placeholder="Ex.: Embalagens e insumos" required minLength={2} maxLength={80}/></label>
+            <label>Classificação<select name="classification" defaultValue="fixo"><option value="fixo">Custo fixo</option><option value="variavel">Custo variável</option><option value="imposto">Imposto / taxa</option><option value="financeiro">Despesa financeira</option><option value="investimento">Investimento</option></select></label>
+            <Button type="submit" disabled={catalogSaving}><Plus/>Adicionar categoria</Button>
+            <div className="catalog-chip-list">{data.categories.map((item) => <span key={item.id}>{item.name} <small>({item.classification})</small></span>)}</div>
+          </form>
+          <form onSubmit={(event) => void createCatalogItem("costCenter", event)} className="catalog-modal-card">
+            <h3>Novo centro de custo</h3>
+            <label>Nome<Input name="name" placeholder="Ex.: Instalação externa" required minLength={2} maxLength={80}/></label>
+            <label>Código (opcional)<Input name="code" placeholder="Ex.: INST" maxLength={16}/></label>
+            <Button type="submit" disabled={catalogSaving}><Plus/>Adicionar centro</Button>
+            <div className="catalog-chip-list">{data.costCenters.map((item) => <span key={item.id}>{item.code ? `${item.code} · ` : ""}{item.name}</span>)}</div>
+          </form>
+        </div>
+        <footer><Button type="button" variant="outline" onClick={() => setCatalogOpen(false)}>Fechar</Button></footer>
+      </div>
+    </div>}
     {composer && <div className="finance-modal"><form key={importDraft?.documentId ?? "manual"} className="payable-composer" onSubmit={createPayable}><header><div><small>{importDraft ? "REVISÃO DO DOCUMENTO" : "NOVO COMPROMISSO"}</small><h2>Cadastrar conta a pagar</h2><p>{importDraft ? "Confira os dados reconhecidos e complete a classificação antes de salvar." : "Registre a origem, classificação e todos os títulos do pagamento."}</p></div><Button type="button" variant="ghost" size="icon" onClick={() => setComposer(false)}><X/></Button></header><div className="form-grid">
       <label className="span-2">Descrição da despesa<Input name="description" defaultValue={importDraft ? `${documentLabels[importDraft.extracted.documentKind] ?? "Documento"} — ${importDraft.extracted.supplierName || "fornecedor a conferir"}` : ""} placeholder="Ex.: Compra de lona 440g — fornecedor X" required/></label>
       <label>Fornecedor<select name="supplierId" defaultValue={importDraft ? data.suppliers.find((item) => (item.document ?? "").replace(/\D/g, "") === importDraft.extracted.supplierDocument)?.id ?? "" : ""}><option value="">Sem fornecedor / não encontrado</option>{data.suppliers.map((item) => <option key={item.id} value={item.id}>{item.trade_name || item.legal_name}</option>)}</select>{importDraft?.extracted.supplierName && <small>Extraído: {importDraft.extracted.supplierName}</small>}</label>

@@ -1039,11 +1039,29 @@ export function QuotesPanel({ search, composerRequest = 0, requestedQuoteId, quo
   const [quoteDirty, setQuoteDirty] = useState(false);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const [reminderView, setReminderView] = useState<"followUps" | "expiring" | "approved" | "overduePayments">("followUps");
+  const [hasMoreQuotes, setHasMoreQuotes] = useState(false);
+  const [loadingMoreQuotes, setLoadingMoreQuotes] = useState(false);
   const [message, setMessage] = useState("");
   const load = useCallback(async () => {
-    const [quoteResult, customerResult, pricingResult, tenderResult] = await Promise.all([api<{ quotes: Quote[] }>("/api/orcamentos"), api<{ customers: Customer[] }>("/api/gestao/clientes"), api<PricingCatalog>("/api/gestao/precificacao"), api<{ items: TenderItem[] }>("/api/gestao/licitacoes").catch(() => ({ items: [] }))]);
-    setQuotes(quoteResult.quotes); setCustomers(customerResult.customers); setCatalog(pricingResult); setTenderItems(tenderResult.items); setLoading(false);
+    const [quoteResult, customerResult, pricingResult, tenderResult] = await Promise.all([api<{ quotes: Quote[]; pagination?: { hasMore: boolean } }>("/api/orcamentos?limit=100&offset=0"), api<{ customers: Customer[] }>("/api/gestao/clientes"), api<PricingCatalog>("/api/gestao/precificacao"), api<{ items: TenderItem[] }>("/api/gestao/licitacoes").catch(() => ({ items: [] }))]);
+    setQuotes(quoteResult.quotes); setHasMoreQuotes(Boolean(quoteResult.pagination?.hasMore)); setCustomers(customerResult.customers); setCatalog(pricingResult); setTenderItems(tenderResult.items); setLoading(false);
   }, []);
+  const loadMoreQuotes = useCallback(async () => {
+    if (loadingMoreQuotes || !hasMoreQuotes) return;
+    setLoadingMoreQuotes(true);
+    try {
+      const next = await api<{ quotes: Quote[]; pagination?: { hasMore: boolean } }>(`/api/orcamentos?limit=100&offset=${quotes.length}`);
+      setQuotes((current) => {
+        const seen = new Set(current.map((item) => item.id));
+        return [...current, ...next.quotes.filter((item) => !seen.has(item.id))];
+      });
+      setHasMoreQuotes(Boolean(next.pagination?.hasMore));
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setLoadingMoreQuotes(false);
+    }
+  }, [hasMoreQuotes, loadingMoreQuotes, quotes.length]);
   useEffect(() => {
     const timer = window.setTimeout(() => load().catch((error: Error) => { setMessage(error.message); setLoading(false); }), 0);
     return () => window.clearTimeout(timer);
@@ -1132,5 +1150,6 @@ export function QuotesPanel({ search, composerRequest = 0, requestedQuoteId, quo
     {details ? <div className="workspace-modal" role="dialog" aria-modal="true" aria-label={`Detalhes do orçamento ${details.number}`} onMouseDown={(event) => { if (event.target === event.currentTarget) setDetails(null); }}><div className="workspace-dialog"><QuoteDetails quote={details} onClose={() => setDetails(null)}/></div></div> : null}
     <div className="table-toolbar quote-table-toolbar"><div><label>Status<select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="abertos">Em aberto</option><option value="carteira">Carteira ativa</option><option value="todos">Todos</option><option value="novo">Novos</option><option value="em_analise">Em análise</option><option value="aguardando_cliente">Aguardando cliente</option><option value="aprovado">Aprovados</option><option value="convertido">Fechados</option><option value="recusado">Recusados</option><option value="expirado">Expirados</option></select></label><label className="quote-search-field"><Search/><Input type="search" value={quoteSearch} onChange={(event) => setQuoteSearch(event.target.value)} placeholder="Pesquisar nº, cliente, telefone, projeto ou item" aria-label="Pesquisar orçamentos"/>{quoteSearch && <button type="button" aria-label="Limpar pesquisa de orçamentos" onClick={() => setQuoteSearch("")}><X/></button>}</label></div><span>{filtered.length} resultado(s)</span></div>
     {!loading && !filtered.length ? <EmptyState icon={ClipboardList} title="Nenhum orçamento neste filtro" text="Crie uma proposta detalhada ou altere o filtro para consultar o histórico comercial."/> : <div className="module-table quote-table"><Table><TableHeader><TableRow><TableHead>Nº / origem</TableHead><TableHead>Cliente / projeto</TableHead><TableHead>Validade</TableHead><TableHead>Status</TableHead><TableHead>Margem</TableHead><TableHead>Valor</TableHead><TableHead></TableHead></TableRow></TableHeader><TableBody>{filtered.map((quote) => { const cost = quote.items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_cost), 0); const total = Number(quote.estimatedValue ?? 0); const margin = total ? ((total - cost) / total) * 100 : 0; const expired = quote.status === "expirado" || Boolean(quote.validUntil && quote.validUntil < new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date())); return <TableRow key={quote.id}><TableCell><b>#{quote.number}</b><small>{sourceLabel[quote.source] ?? quote.source} · {date(quote.createdAt)}</small></TableCell><TableCell><b>{quote.company || quote.customerName}</b><small>{quote.service}</small></TableCell><TableCell><span className={expired ? "quote-expired-date" : ""}>{date(quote.validUntil)}{expired && <small>Vencido</small>}</span></TableCell><TableCell><select value={quote.status} disabled={quote.status === "convertido"} onChange={(event) => changeStatus(quote.id, event.target.value)}><option value="novo">Novo</option><option value="em_analise">Em análise</option><option value="aguardando_cliente">Aguardando cliente</option><option value="aprovado">Aprovado</option><option value="recusado">Recusado</option><option value="expirado">Expirado</option><option value="convertido">Fechado</option></select></TableCell><TableCell><span className={margin && margin < 25 ? "margin-badge warning" : "margin-badge"}>{total ? `${margin.toFixed(1)}%` : "—"}</span></TableCell><TableCell><b>{quote.estimatedValue !== null ? currency.format(total) : "A calcular"}</b><small>{quote.items.length} item(ns)</small></TableCell><TableCell><div className="row-actions"><Button size="sm" variant="outline" onClick={() => setDetails(quote)}>Detalhes<ChevronDown/></Button><Button size="sm" variant="outline" onClick={() => { setDuplicating(quote); setEditing(null); setNewOpen(false); setDetails(null); }}><Copy/>Duplicar</Button>{expired && !["convertido", "aprovado"].includes(quote.status) && <Button size="sm" variant="outline" onClick={() => { setRevalidating(quote); setEditing(null); setDuplicating(null); setDetails(null); }}><CalendarClock/>Revalidar</Button>}{quote.status !== "convertido" && <Button size="sm" variant="outline" onClick={() => { setEditing(quote); setDuplicating(null); setRevalidating(null); setNewOpen(false); setDetails(null); }}><Pencil/>Editar</Button>}{quote.status !== "convertido" && <Button size="sm" onClick={() => setClosing(quote)}>Fechar</Button>}</div></TableCell></TableRow>; })}</TableBody></Table></div>}
+    {hasMoreQuotes && <div className="list-load-more"><span>Exibindo {quotes.length} orçamento(s) carregado(s). Há mais registros antigos disponíveis.</span><Button type="button" variant="outline" onClick={() => void loadMoreQuotes()} disabled={loadingMoreQuotes}>{loadingMoreQuotes ? "Carregando..." : "Carregar mais orçamentos"}</Button></div>}
   </>;
 }

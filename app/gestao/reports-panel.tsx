@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, BarChart3, Boxes, BriefcaseBusiness, CalendarDays, Check, CircleDollarSign, Download, Factory, FileText, Printer, ReceiptText, RefreshCw, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "./toast-context";
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const decimal = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
@@ -43,9 +44,15 @@ function RankingList({ rows, empty }: { rows: Ranking[]; empty: string }) {
   const max = Math.max(...rows.map((item) => item.total), 1);
   return rows.length ? <div className="report-ranking">{rows.map((item) => <article key={item.name}><div><b>{item.name}</b><strong>{currency.format(item.total)}</strong></div><i><span style={{ width: `${item.total / max * 100}%` }}/></i></article>)}</div> : <div className="report-empty">{empty}</div>;
 }
-const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+const csvCell = (value: unknown) => {
+  if (typeof value === "number") return Number.isFinite(value) ? `"${value.toFixed(2).replace(".", ",")}"` : '""';
+  let text = String(value ?? "").replace(/\r\n/g, " ").replace(/[\r\n]/g, " ");
+  if (/^[=+\-@\t]/.test(text)) text = `'${text}`;
+  return `"${text.replaceAll('"', '""')}"`;
+};
 
 export function ReportsPanel() {
+  const { notify } = useToast();
   const initial = monthRange();
   const [from, setFrom] = useState(initial.from); const [to, setTo] = useState(initial.to);
   const [view, setView] = useState<"executivo" | "financeiro" | "comercial" | "operacao">("executivo");
@@ -69,7 +76,7 @@ export function ReportsPanel() {
     ];
     return `\uFEFF${rows.map((row) => row.map(csvCell).join(";")).join("\r\n")}`;
   }, [report]);
-  function exportCsv() { if (!detailedCsv) return; const blob = new Blob([detailedCsv], { type: "text/csv;charset=utf-8" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `relatorio-gerencial-${from}-${to}.csv`; link.click(); URL.revokeObjectURL(link.href); }
+  function exportCsv() { if (!detailedCsv) return; const blob = new Blob([detailedCsv], { type: "text/csv;charset=utf-8" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `relatorio-gerencial-${from}-${to}.csv`; link.click(); URL.revokeObjectURL(link.href); notify("Relatório gerencial exportado em CSV."); }
   function preset(offset: number) { const range = monthRange(offset); setFrom(range.from); setTo(range.to); }
 
   return <section className="reports-workspace">

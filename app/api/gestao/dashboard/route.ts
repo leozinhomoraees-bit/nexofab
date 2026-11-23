@@ -23,7 +23,7 @@ export async function GET() {
   const emptyList = Promise.resolve({ data: [] as never[], error: null });
   const emptySingle = Promise.resolve({ data: null, error: null });
 
-  const [payments, quotes, production, inventory, customers, financialMonth, paidPayables, openReceivables, previousFinancialMonth, pricingFixedCosts, historicalFinancialMonths, historicalPayments, historicalPayables] = await Promise.all([
+  const [payments, quotes, production, inventory, customers, financialMonth, paidPayables, openReceivables, previousFinancialMonth, pricingFixedCosts, historicalFinancialMonths, historicalPayments, historicalPayables, organizationRow, pricingSettingsRow] = await Promise.all([
     canViewFinance ? access.supabase.from("quote_payments").select("amount").gte("received_on", monthStart).lt("received_on", monthEnd) : emptyList,
     access.supabase.from("quotes").select("id, number, customer_name, service, status, estimated_value, valid_until, created_at, updated_at").order("created_at", { ascending: false }).limit(100),
     access.supabase.from("production_orders").select("id, number, title, stage, priority, due_at, created_at").not("stage", "in", "(concluido,cancelado)").order("created_at", { ascending: false }).limit(100),
@@ -37,6 +37,8 @@ export async function GET() {
     canViewFinance ? access.supabase.from("financial_months").select("competence_month, gross_revenue, variable_costs").gte("competence_month", historyStart).lt("competence_month", monthStart) : emptyList,
     canViewFinance ? access.supabase.from("quote_payments").select("amount, received_on").gte("received_on", historyStart).lt("received_on", monthStart) : emptyList,
     canViewFinance ? access.supabase.from("payable_installments").select("amount, paid_amount, interest_amount, fine_amount, discount_amount, paid_on, payables(expense_categories(classification))").eq("status", "pago").gte("paid_on", historyStart).lt("paid_on", monthStart) : emptyList,
+    access.supabase.from("organizations").select("logo_url, whatsapp, document, public_slug, public_portal_enabled").eq("id", access.organizationId).maybeSingle(),
+    access.supabase.from("pricing_settings").select("id").eq("id", "default").maybeSingle(),
   ]);
 
   const error = payments.error || quotes.error || production.error || inventory.error || customers.error || financialMonth.error || paidPayables.error || openReceivables.error || previousFinancialMonth.error || pricingFixedCosts.error || historicalFinancialMonths.error || historicalPayments.error || historicalPayables.error;
@@ -109,6 +111,12 @@ export async function GET() {
 
   return Response.json({ dashboard: {
     permissions: { finance: canViewFinance, receivables: canViewReceivables },
+    onboarding: {
+      companyConfigured: Boolean(organizationRow.data?.logo_url || organizationRow.data?.whatsapp || organizationRow.data?.document),
+      pricingConfigured: Boolean(pricingSettingsRow.data?.id),
+      portalEnabled: Boolean(organizationRow.data?.public_portal_enabled && organizationRow.data?.public_slug),
+      hasQuote: quoteRows.length > 0,
+    },
     revenue: receivedRevenue,
     openQuotes: activeQuotes.length,
     openQuoteValue: activeQuotes.reduce((sum, quote) => sum + Number(quote.estimated_value ?? 0), 0),

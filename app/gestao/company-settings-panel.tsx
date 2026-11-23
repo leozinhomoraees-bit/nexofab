@@ -6,6 +6,7 @@ import { Building2, Check, Copy, ExternalLink, Globe, ImageUp, LoaderCircle, Map
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { isValidPublicSlug, normalizePublicSlug } from "@/lib/public-portal";
+import { useToast } from "./toast-context";
 
 type Company = {
   trade_name: string; legal_name?: string | null; document?: string | null; state_registration?: string | null;
@@ -20,6 +21,7 @@ const empty: Company = { trade_name: "", public_slug: "", public_portal_enabled:
 const value = (entry?: string | null) => entry ?? "";
 
 export function CompanySettingsPanel() {
+  const { notify } = useToast();
   const [company, setCompany] = useState<Company>(empty);
   const [savedPortal, setSavedPortal] = useState<{ slug: string; enabled: boolean }>({ slug: "", enabled: false });
   const [loading, setLoading] = useState(true);
@@ -62,6 +64,7 @@ export function CompanySettingsPanel() {
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
+      notify("Link do portal público copiado!");
       window.setTimeout(() => setCopied(false), 2500);
     } catch {
       setError(`Não foi possível copiar automaticamente. Link do portal: ${url}`);
@@ -91,7 +94,8 @@ export function CompanySettingsPanel() {
         enabled: Boolean(payload.company?.public_portal_enabled),
       });
       setMessage("Dados da empresa salvos. Propostas e portal público usarão estas informações automaticamente.");
-    } catch (caught) { setError((caught as Error).message); }
+      notify("Dados da empresa salvos com sucesso.");
+    } catch (caught) { const err = (caught as Error).message; setError(err); notify(err, "error"); }
     finally { setSaving(false); }
   }
 

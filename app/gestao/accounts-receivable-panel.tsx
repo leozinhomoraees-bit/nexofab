@@ -1,10 +1,12 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Banknote, CalendarClock, Check, CircleDollarSign, Clock3, FileText, MessageCircle, RefreshCw, Search, Send, UserRound, X } from "lucide-react";
+import { AlertTriangle, Banknote, CalendarClock, Check, CircleDollarSign, Clock3, Download, FileText, MessageCircle, RefreshCw, Search, Send, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { downloadCsv } from "@/lib/csv-export";
 import { whatsappUrl } from "@/lib/whatsapp";
+import { useToast } from "./toast-context";
 
 type CustomerAccount = { id: string; name: string; company_name?: string | null; billing_cycle: "imediato" | "semanal" | "mensal"; billing_weekday?: number | null; billing_day?: number | null; credit_limit?: number | null };
 type Quote = { id: string; number: number; customer_id?: string | null; customer_name: string; company?: string | null; phone?: string | null; email?: string | null; service: string; estimated_value?: number | null; customers?: CustomerAccount | CustomerAccount[] | null };
@@ -18,6 +20,7 @@ const weekdayLabels: Record<number, string> = { 1: "segunda", 2: "terça", 3: "q
 const customerAccount = (quote: Quote) => Array.isArray(quote.customers) ? quote.customers[0] : quote.customers;
 
 export function AccountsReceivablePanel({ search: globalSearch }: { search: string }) {
+  const { notify } = useToast();
   const [month, setMonth] = useState(currentMonth());
   const [items, setItems] = useState<Receivable[]>([]);
   const [status, setStatus] = useState("todos");
@@ -69,7 +72,29 @@ export function AccountsReceivablePanel({ search: globalSearch }: { search: stri
     return [...groups.values()].sort((a, b) => b.total - a.total);
   }, [items]);
 
-  async function patch(body: object, success: string) { const response = await fetch("/api/financeiro/contas-receber", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const payload = await response.json(); if (!response.ok) { setMessage(payload.error ?? "Não foi possível concluir."); return false; } await load(); setMessage(success); return true; }
+  async function patch(body: object, success: string) { const response = await fetch("/api/financeiro/contas-receber", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const payload = await response.json(); if (!response.ok) { const err = payload.error ?? "Não foi possível concluir."; setMessage(err); notify(err, "error"); return false; } await load(); setMessage(success); notify(success); return true; }
+  function exportReceivablesCsv() {
+    if (!visible.length) {
+      notify("Nenhum recebimento filtrado para exportar.", "info");
+      return;
+    }
+    downloadCsv(
+      `contas-a-receber-${month}`,
+      ["Vencimento", "Parcela", "Status", "Orçamento", "Cliente", "Serviço", "Forma", "Valor", "Recebido em"],
+      visible.map((item) => [
+        brDate(item.due_date),
+        item.installment_number === 0 ? "Entrada" : `Parcela ${item.installment_number}`,
+        item.status === "pendente" && item.due_date < today() ? "vencido" : item.status,
+        `#${item.quotes.number}`,
+        item.quotes.company || item.quotes.customer_name,
+        item.quotes.service,
+        paymentLabels[item.payment_method] ?? item.payment_method,
+        Number(item.status === "recebido" ? item.received_amount ?? item.amount : item.amount),
+        item.received_on ? brDate(item.received_on) : "",
+      ]),
+    );
+    notify(`Exportados ${visible.length} recebimento(s) em CSV.`);
+  }
   async function receive(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!receiving) return; const form = new FormData(event.currentTarget); const ok = await patch({ action: "receive", installmentId: receiving.id, receivedOn: form.get("receivedOn"), receivedAmount: Number(form.get("receivedAmount")), interest: Number(form.get("interest")), fine: Number(form.get("fine")), discount: Number(form.get("discount")), bankAccount: form.get("bankAccount"), paymentMethod: form.get("paymentMethod"), notes: form.get("notes") }, "Recebimento registrado e enviado ao caixa realizado."); if (ok) setReceiving(null); }
   function whatsapp(item: Receivable) { const destination = whatsappUrl(item.quotes.phone, `Olá, ${item.quotes.customer_name}! Lembramos que a parcela ${item.installment_number || "entrada"} do orçamento #${item.quotes.number}, no valor de ${currency.format(Number(item.amount))}, vence em ${brDate(item.due_date)}.`); if (!destination) { setMessage("Cadastre um WhatsApp válido no cliente antes de enviar a cobrança."); return; } window.open(destination, "_blank", "noopener,noreferrer"); }
   async function receipt(item: Receivable, send: boolean) {
@@ -89,7 +114,7 @@ export function AccountsReceivablePanel({ search: globalSearch }: { search: stri
   }
 
   return <section className="payables-panel">
-    <div className="payables-toolbar"><div><small>CONTAS A RECEBER</small><h2>Recebimentos de clientes</h2><p>Parcelas são criadas automaticamente quando o orçamento é fechado.</p></div><div className="payables-actions"><label>Competência<Input type="month" value={month} onChange={(event) => setMonth(event.target.value)}/></label><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw/>{loading ? "Atualizando" : "Atualizar"}</Button></div></div>
+    <div className="payables-toolbar"><div><small>CONTAS A RECEBER</small><h2>Recebimentos de clientes</h2><p>Parcelas são criadas automaticamente quando o orçamento é fechado.</p></div><div className="payables-actions"><label>Competência<Input type="month" value={month} onChange={(event) => setMonth(event.target.value)}/></label><Button variant="outline" onClick={exportReceivablesCsv} disabled={!visible.length}><Download/>CSV</Button><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw/>{loading ? "Atualizando" : "Atualizar"}</Button></div></div>
     {message && <div className={message.includes("registrado") ? "finance-message success" : "finance-message"}>{message.includes("registrado") ? <Check/> : <AlertTriangle/>}{message}</div>}
     <div className="payables-kpis"><article><span><CircleDollarSign/>A receber</span><b>{currency.format(summary.open)}</b><small>Saldo previsto nesta competência</small></article><article className="danger"><span><AlertTriangle/>Em atraso</span><b>{currency.format(summary.overdue)}</b><small>Prioridade de cobrança</small></article><article className="warning"><span><Clock3/>Vence hoje</span><b>{currency.format(summary.today)}</b><small>Confirmar pagamento</small></article><article className="success"><span><Banknote/>Recebido no mês</span><b>{currency.format(summary.received)}</b><small>Integrado ao caixa realizado</small></article></div>
     {customerStatements.length > 0 && <section className="customer-statements"><header><div><small>CONTAS DE PERÍODO</small><h3>Clientes com fechamento semanal ou mensal</h3></div><span>{customerStatements.length} conta(s) ativa(s)</span></header><div>{customerStatements.map((statement) => <button key={statement.id} type="button" onClick={() => setLocalSearch(statement.name)}><span className={`statement-cycle ${statement.cycle}`}>{statement.cycle}</span><div><b>{statement.name}</b><small>{statement.closeLabel} · {statement.count} lançamento(s) · próximo vencimento {brDate(statement.nextDue)}</small></div><strong>{currency.format(statement.total)}{statement.overdue > 0 && <small>{currency.format(statement.overdue)} vencido</small>}{statement.creditLimit > 0 && <em>{Math.min(statement.total / statement.creditLimit * 100, 999).toFixed(0)}% do limite</em>}</strong></button>)}</div></section>}

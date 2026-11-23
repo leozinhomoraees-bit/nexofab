@@ -90,18 +90,32 @@ const quoteRevalidationSchema = z.object({
 });
 const quoteUpdateSchema = quoteSchema.extend({ id: z.string().uuid() });
 
-export async function GET() {
+export async function GET(request: Request) {
   const access = await getManagementAccess();
   if ("response" in access) return access.response;
   const supabase = access.supabase;
   const canViewCommercialFinance = ["admin", "financeiro", "comercial"].includes(access.role);
+  const url = new URL(request.url);
+  const limitParam = Number.parseInt(url.searchParams.get("limit") ?? "100", 10);
+  const offsetParam = Number.parseInt(url.searchParams.get("offset") ?? "0", 10);
+  const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 100) : 100;
+  const offset = Number.isFinite(offsetParam) ? Math.max(offsetParam, 0) : 0;
+  const statusFilter = url.searchParams.get("status")?.trim() ?? "";
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("quotes")
     .select("id, number, customer_id, customer_name, company, phone, email, service, dimensions, material, details, quantity, status, source, created_at, updated_at, estimated_value, subtotal, discount, valid_until, payment_terms, delivery_days, installation_included, freight, internal_notes, quote_items(id, description, service_type, material, width_mm, height_mm, depth_mm, quantity, unit, unit_cost, unit_price, total, production_notes, sort_order, pricing_source, suggested_unit_price, waste_percent, pricing_snapshot, pricing_product_id, option_group, selected_by_customer)")
     .order("created_at", { ascending: false })
-    .limit(100);
+    .range(offset, offset + limit);
+
+  if (statusFilter && ["novo", "em_analise", "aguardando_cliente", "aprovado", "recusado", "expirado", "convertido"].includes(statusFilter)) {
+    query = query.eq("status", statusFilter);
+  }
+
+  const { data: rawData, error } = await query;
   if (error) return Response.json({ error: "Não foi possível consultar os orçamentos." }, { status: 500 });
+  const hasMore = (rawData ?? []).length > limit;
+  const data = (rawData ?? []).slice(0, limit);
   const quoteIds = (data ?? []).map((quote) => quote.id);
   const versionsResult = quoteIds.length && canViewCommercialFinance
     ? await supabase.from("quote_approval_versions").select("id, quote_id, version, approval_source, approved_at").in("quote_id", quoteIds).order("version", { ascending: false })
@@ -157,7 +171,7 @@ export async function GET() {
     overdueBalance: receivablesByQuote.get(quote.id)?.overdue ?? 0,
     nextPaymentDue: receivablesByQuote.get(quote.id)?.nextDue ?? null,
     items: [...(quote.quote_items ?? [])].sort((a, b) => a.sort_order - b.sort_order),
-  })) });
+  })), pagination: { offset, limit, hasMore, nextOffset: offset + limit } });
 }
 
 export async function PATCH(request: Request) {

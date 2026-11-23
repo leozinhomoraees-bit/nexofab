@@ -54,22 +54,32 @@ function optimizedAdhesiveLength(snapshot: StoredPricingSnapshot | null, usage: 
   return existing > 0 ? Math.min(existing, optimized) : optimized;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const access = await getManagementAccess();
   if ("response" in access) return access.response;
-  if (["admin", "comercial", "producao"].includes(access.role)) await ensureApprovedProductionOrders(access.supabase, access.user.id);
+  const url = new URL(request.url);
+  const limitParam = Number.parseInt(url.searchParams.get("limit") ?? "100", 10);
+  const offsetParam = Number.parseInt(url.searchParams.get("offset") ?? "0", 10);
+  const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 100) : 100;
+  const offset = Number.isFinite(offsetParam) ? Math.max(offsetParam, 0) : 0;
+
+  if (offset === 0 && ["admin", "comercial", "producao"].includes(access.role)) await ensureApprovedProductionOrders(access.supabase, access.user.id);
   const detailed = await access.supabase.from("production_orders")
     .select("id, number, quote_id, title, description, stage, priority, due_at, scheduled_start_at, responsible_id, started_at, completed_at, created_at, updated_at, quotes(id, number, customer_name, company, phone, email, service, details, internal_notes, estimated_value, delivery_days, payment_terms, installation_included, quote_items(id, description, service_type, material, width_mm, height_mm, depth_mm, quantity, unit, production_notes, pricing_snapshot, sort_order, selected_by_customer)), production_material_reservations(id, inventory_item_id, planned_quantity, reserved_quantity, consumed_quantity, unit, status, inventory_items(id, name, current_quantity, unit, average_cost)), production_actual_entries(id, entry_type, description, quantity, unit, unit_cost, total_cost, notes, occurred_at)")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit);
   let data: unknown[] | null = detailed.data;
   if (detailed.error && ["42P01", "PGRST200", "PGRST205"].includes(detailed.error.code)) {
     const fallback = await access.supabase.from("production_orders")
       .select("id, number, quote_id, title, description, stage, priority, due_at, started_at, completed_at, created_at, updated_at, quotes(id, number, customer_name, company, phone, email, service, details, internal_notes, estimated_value, delivery_days, payment_terms, installation_included, quote_items(id, description, service_type, material, width_mm, height_mm, depth_mm, quantity, unit, production_notes, pricing_snapshot, sort_order, selected_by_customer))")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit);
     if (fallback.error) return Response.json({ error: "Não foi possível carregar a produção." }, { status: 500 });
     data = fallback.data;
   } else if (detailed.error) return Response.json({ error: "Não foi possível carregar a produção." }, { status: 500 });
-  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  const rawRows = (data ?? []) as Array<Record<string, unknown>>;
+  const hasMore = rawRows.length > limit;
+  const rows = rawRows.slice(0, limit);
   const snapshotMaterialIds = [...new Set(rows.flatMap((row) => {
     const relation = row.quotes as Record<string, unknown> | Array<Record<string, unknown>> | null;
     const quote = Array.isArray(relation) ? relation[0] : relation;
@@ -130,7 +140,7 @@ export async function GET() {
       full_name: profile.full_name,
       role: roleByUser.get(profile.id) ?? "producao",
     }));
-  return Response.json({ orders: rows, staff, advancedControl: !detailed.error });
+  return Response.json({ orders: rows, staff, advancedControl: !detailed.error, pagination: { offset, limit, hasMore, nextOffset: offset + limit } });
 }
 
 export async function POST(request: Request) {

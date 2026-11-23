@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, CalendarDays, Check, CircleDollarSign, RefreshCw, TrendingUp } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, CircleDollarSign, Download, RefreshCw, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { downloadCsv } from "@/lib/csv-export";
+import { useToast } from "./toast-context";
 import styles from "./commission-report-panel.module.css";
 
 type Report = {
@@ -32,6 +34,7 @@ function presetRange(preset: "today" | "week" | "month") {
 }
 
 export function CommissionReportPanel() {
+  const { notify } = useToast();
   const initial = presetRange("month");
   const [preset, setPreset] = useState<"today" | "week" | "month" | "custom">("month");
   const [from, setFrom] = useState(initial.from);
@@ -63,6 +66,30 @@ export function CommissionReportPanel() {
   }
   const summary = report?.summary ?? { sales: 0, commissionBase: 0, commission: 0, tax: 0, estimatedResult: 0, closedQuotes: 0, averageCommissionPercent: 0 };
 
+  function exportCommissionsCsv() {
+    if (!report?.rows.length) {
+      notify("Nenhuma comissão neste período para exportar.", "info");
+      return;
+    }
+    downloadCsv(
+      `comissoes-${from}-a-${to}`,
+      ["Orçamento", "Data", "Status", "Cliente", "Serviço", "Venda", "Base comissionável", "Comissão", "Imposto", "Resultado estimado"],
+      report.rows.map((row) => [
+        `#${row.number}`,
+        brDate(row.commercialAt),
+        row.status === "convertido" ? "Fechado" : "Aprovado",
+        row.customerName,
+        row.service,
+        row.sale,
+        row.commissionBase,
+        row.commission,
+        row.tax,
+        row.estimatedResult,
+      ]),
+    );
+    notify(`Exportadas ${report.rows.length} linha(s) de comissões em CSV.`);
+  }
+
   return (
     <section className={styles.panel}>
       <header className={styles.head}>
@@ -71,9 +98,14 @@ export function CommissionReportPanel() {
           <h2>Comissões de vendas aprovadas</h2>
           <p>Usa os percentuais e custos salvos no cálculo do orçamento. Propostas aprovadas e pedidos fechados entram no período.</p>
         </div>
-        <Button variant="outline" onClick={() => void load()} disabled={loading}>
-          <RefreshCw />{loading ? "Atualizando" : "Atualizar"}
-        </Button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Button variant="outline" onClick={exportCommissionsCsv} disabled={!report?.rows.length}>
+            <Download />Exportar CSV
+          </Button>
+          <Button variant="outline" onClick={() => void load()} disabled={loading}>
+            <RefreshCw />{loading ? "Atualizando" : "Atualizar"}
+          </Button>
+        </div>
       </header>
 
       <div className={styles.period}>

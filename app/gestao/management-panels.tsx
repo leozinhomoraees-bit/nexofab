@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { whatsappUrl } from "@/lib/whatsapp";
+import { useToast } from "./toast-context";
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const showDate = (value?: string | null) => value ? new Date(value).toLocaleDateString("pt-BR") : "—";
@@ -33,6 +34,7 @@ function Feedback({ message }: { message: string }) {
 
 type Dashboard = {
   permissions?: { finance: boolean; receivables: boolean };
+  onboarding?: { companyConfigured: boolean; pricingConfigured: boolean; portalEnabled: boolean; hasQuote: boolean };
   revenue: number; openQuotes: number; openQuoteValue: number; approvedQuotes: number; approvedPendingProduction: number; unpaidClosedQuotes: number; unpaidClosedValue: number; overdueReceivableQuotes: number; overdueReceivableValue: number; followUpQuotesDue: number; expiringQuotes: number; productionOrders: number; overdueProduction: number; criticalStock: number; customerCount: number;
   recentQuotes: Array<{ id: string; number: number; customerName: string; service: string; status: string; value: number; createdAt: string; validUntil?: string | null }>;
   productionByStage: Array<{ stage: string; count: number }>;
@@ -59,9 +61,40 @@ export function OverviewPanel({ onNavigate }: { onNavigate: (section: string) =>
     : data.breakEven.recurringSource === "pricing" ? "custos fixos cadastrados na Precificação" : "competência atual";
   const canViewFinance = data.permissions?.finance ?? true;
   const canViewReceivables = data.permissions?.receivables ?? true;
+  const onboardingSteps = data.onboarding ? [
+    { key: "company", done: data.onboarding.companyConfigured, title: "Identidade da empresa", desc: "Logo, CNPJ e WhatsApp para propostas", target: "empresa" },
+    { key: "pricing", done: data.onboarding.pricingConfigured, title: "Regras de precificação", desc: "Margem, custos e insumos base", target: "precificacao" },
+    { key: "portal", done: data.onboarding.portalEnabled, title: "Portal público /p/slug", desc: "Receba pedidos de clientes pelo link", target: "empresa" },
+    { key: "quote", done: data.onboarding.hasQuote, title: "Primeiro orçamento", desc: "Crie e envie sua primeira proposta", target: "orcamentos" },
+  ] : [];
+  const onboardingCompleted = onboardingSteps.filter((step) => step.done).length;
+  const showOnboarding = !loading && onboardingSteps.length > 0 && onboardingCompleted < onboardingSteps.length;
   const today = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "long", timeZone: "America/Sao_Paulo" }).format(new Date());
   return <>
     <header className="overview-hero"><div><p>PAINEL EXECUTIVO</p><h1>Visão geral da operação</h1><span className="overview-date">{today}</span><small>Comercial, produção, estoque e financeiro reunidos em uma leitura rápida.</small></div><Button variant="outline" onClick={() => load()} disabled={loading}><RefreshCw className={loading ? "spin" : ""}/>{loading ? "Atualizando" : "Atualizar dados"}</Button></header>
+    {showOnboarding && (
+      <section className="onboarding-checklist" aria-label="Checklist de primeiros passos">
+        <div className="onboarding-checklist-head">
+          <div>
+            <small>PRIMEIROS PASSOS</small>
+            <h2>Deixe o NexoFab pronto para vender</h2>
+            <p>Conclua estas etapas rápidas para aproveitar ao máximo o período de avaliação.</p>
+          </div>
+          <div className="onboarding-checklist-progress">
+            <b>{onboardingCompleted} de {onboardingSteps.length}</b>
+            <div className="onboarding-checklist-bar"><span style={{ width: `${(onboardingCompleted / onboardingSteps.length) * 100}%` }}/></div>
+          </div>
+        </div>
+        <div className="onboarding-checklist-steps">
+          {onboardingSteps.map((step) => (
+            <button key={step.key} type="button" className={`onboarding-step ${step.done ? "done" : ""}`} onClick={() => onNavigate(step.target)}>
+              <span className="onboarding-step-icon">{step.done ? <Check/> : <ArrowRight/>}</span>
+              <div><b>{step.title}</b><small>{step.desc}</small></div>
+            </button>
+          ))}
+        </div>
+      </section>
+    )}
     {canViewFinance && <section className={`overview-break-even ${breakEvenReady ? "ready" : breakEvenNegative ? "danger" : "pending"}`}>
       <div className={`overview-break-even-ring ${breakEvenNegative ? "negative" : ""}`} style={{ "--progress": `${breakEvenReady ? Math.min(Math.max(data.breakEven.progress, 0), 100) : 0}%` } as React.CSSProperties}><div><b>{breakEvenReady ? `${Math.round(data.breakEven.progress)}%` : breakEvenNegative ? `${data.breakEven.contributionRate.toFixed(1)}%` : "—"}</b><span>{breakEvenNegative ? "margem" : "da meta"}</span></div></div>
       <div className="overview-break-even-main"><small>CORAÇÃO DA GESTÃO {breakEvenReady && <span className={`overview-break-even-basis ${breakEvenProjected ? "projected" : "realized"}`}>{breakEvenProjected ? "PROJETADO" : "REALIZADO"}</span>}</small><h2>Ponto de equilíbrio do mês</h2>{breakEvenReady ? <><strong>{currency.format(data.breakEven.accounting)}</strong><p>{breakEvenProjected ? <>Margem média de <b>{data.breakEven.historicalMonths} competência(s)</b> · custos vindos da {recurringSource}</> : <>{currency.format(data.breakEven.grossRevenue)} realizados · <b>{currency.format(data.breakEven.remaining)} ainda necessários para cobrir a operação</b></>}</p><i><em style={{ width: `${Math.min(Math.max(data.breakEven.progress, 0), 100)}%` }}/></i></> : breakEvenNegative ? <><strong>Margem negativa — não calculável</strong><p>{currency.format(data.breakEven.grossRevenue)} de receita − {currency.format(data.breakEven.variableCosts)} variáveis = <b>{currency.format(data.breakEven.contribution)} de contribuição</b></p></> : <><strong>{data.breakEven.configured ? "Complete a competência" : "Configure a competência"}</strong><p>Cadastre custos fixos e tenha ao menos uma competência anterior com receita e custos variáveis para gerar a projeção automática.</p></>}</div>
@@ -145,14 +178,33 @@ const stages = ["briefing", "arte", "aprovacao", "producao", "acabamento", "expe
 const priorities = ["baixa", "normal", "alta", "urgente"];
 
 export function ProductionPanel({ search }: { search: string }) {
+  const { notify } = useToast();
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
   const [selected, setSelected] = useState<ProductionOrder | null>(null);
   const [staff, setStaff] = useState<ProductionStaff[]>([]);
   const [advancedControl, setAdvancedControl] = useState(true);
   const [stageFilter, setStageFilter] = useState("ativos");
+  const [hasMoreOrders, setHasMoreOrders] = useState(false);
+  const [loadingMoreOrders, setLoadingMoreOrders] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  const load = useCallback(() => api<{ orders: ProductionOrder[]; staff?: ProductionStaff[]; advancedControl?: boolean }>("/api/gestao/producao").then((result) => { setOrders(result.orders); setStaff(result.staff ?? []); setAdvancedControl(result.advancedControl !== false); setSelected((current) => current ? result.orders.find((order) => order.id === current.id) ?? null : null); }).finally(() => setLoading(false)), []);
+  const load = useCallback(() => api<{ orders: ProductionOrder[]; staff?: ProductionStaff[]; advancedControl?: boolean; pagination?: { hasMore: boolean } }>("/api/gestao/producao?limit=100&offset=0").then((result) => { setOrders(result.orders); setHasMoreOrders(Boolean(result.pagination?.hasMore)); setStaff(result.staff ?? []); setAdvancedControl(result.advancedControl !== false); setSelected((current) => current ? result.orders.find((order) => order.id === current.id) ?? null : null); }).finally(() => setLoading(false)), []);
+  const loadMoreOrders = useCallback(async () => {
+    if (loadingMoreOrders || !hasMoreOrders) return;
+    setLoadingMoreOrders(true);
+    try {
+      const next = await api<{ orders: ProductionOrder[]; pagination?: { hasMore: boolean } }>(`/api/gestao/producao?limit=100&offset=${orders.length}`);
+      setOrders((current) => {
+        const seen = new Set(current.map((item) => item.id));
+        return [...current, ...next.orders.filter((item) => !seen.has(item.id))];
+      });
+      setHasMoreOrders(Boolean(next.pagination?.hasMore));
+    } catch (error) {
+      notify((error as Error).message, "error");
+    } finally {
+      setLoadingMoreOrders(false);
+    }
+  }, [hasMoreOrders, loadingMoreOrders, notify, orders.length]);
   useEffect(() => { load().catch((error: Error) => setMessage(error.message)); }, [load]);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
   const dueSoonDate = new Date(`${today}T12:00:00-03:00`); dueSoonDate.setDate(dueSoonDate.getDate() + 2);
@@ -190,6 +242,7 @@ export function ProductionPanel({ search }: { search: string }) {
     {reminders.length > 0 && <section className="production-reminders"><header><div><small>LEMBRETES AUTOMÁTICOS</small><h2>O que precisa de atenção agora</h2><p>Os avisos permanecem ativos até a etapa ou o prazo da ordem ser atualizado.</p></div><span>{reminders.length} pendência(s)</span></header><div>{reminders.slice(0, 8).map(({ order, kind, title, text }) => <button type="button" key={`${order.id}-${kind}`} className={kind} onClick={() => setSelected(order)}><span>{kind === "overdue" ? <AlertTriangle/> : kind === "due" ? <CalendarClock/> : <Factory/>}</span><div><small>{title}</small><b>OS-{order.number} · {order.quotes?.company || order.quotes?.customer_name || "Cliente"}</b><p>{order.quotes?.service || order.title}</p><em>{text}</em></div><ArrowRight/></button>)}</div></section>}
     <Feedback message={message}/><div className="production-toolbar"><label>Visualizar<select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}><option value="ativos">Ordens ativas</option><option value="aguardando_programacao">Aguardando programação</option><option value="em_producao">Em produção e acabamento</option><option value="atrasados">Prazo vencido</option><option value="todos">Todas</option>{stages.map((stage) => <option key={stage} value={stage}>{stageLabel[stage]}</option>)}</select></label><span>{filtered.length} ordem(ns)</span><Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw/>Atualizar</Button></div>
     {!loading && !filtered.length ? <EmptyState icon={Factory} title="Nenhuma ordem neste filtro" text="Ao fechar um orçamento, a ordem de serviço será criada automaticamente aqui."/> : <div className="production-order-grid">{filtered.map((order) => { const overdue = !["concluido", "cancelado"].includes(order.stage) && Boolean(order.due_at) && order.due_at!.slice(0, 10) < today; return <article key={order.id} className={overdue ? "overdue" : ""}><header><span>OS-{order.number}</span><em className={`priority-${order.priority}`}>{order.priority}</em></header><h3>{order.quotes?.service || order.title}</h3><p>{order.quotes?.company || order.quotes?.customer_name || "Cliente não vinculado"}</p><div><span><small>Etapa</small><b>{stageLabel[order.stage] ?? order.stage}</b></span><span><small>Prazo</small><b>{showDate(order.due_at)}</b></span><span><small>Valor</small><b>{currency.format(Number(order.quotes?.estimated_value ?? 0))}</b></span></div><footer><Button size="sm" variant="outline" onClick={() => contact(order)}><MessageCircle/>Cliente</Button><Button size="sm" onClick={() => setSelected(order)}><FileText/>Abrir OS</Button></footer></article>; })}</div>}
+    {hasMoreOrders && <div className="list-load-more"><span>Exibindo {orders.length} ordem(ns) carregada(s). Há ordens mais antigas disponíveis.</span><Button type="button" variant="outline" onClick={() => void loadMoreOrders()} disabled={loadingMoreOrders}>{loadingMoreOrders ? "Carregando..." : "Carregar mais ordens"}</Button></div>}
     {selected && <ProductionOrderDialog order={selected} staff={staff} advancedControl={advancedControl} onClose={() => setSelected(null)} onUpdate={update} onRefresh={load} onWhatsApp={() => contact(selected)}/>}</>;
 }
 
