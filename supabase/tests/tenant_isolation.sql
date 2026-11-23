@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(40);
+select plan(44);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password,
@@ -431,6 +431,40 @@ select results_eq(
   $$select count(*)::bigint from public.management_notifications where quote_id = 'c4000000-0000-0000-0000-000000000001'$$,
   $$values (0::bigint)$$,
   'Notificação de visualização da proposta permanece isolada dentro do Tenant C'
+);
+reset role;
+
+-- 41 a 44: Proteção do Painel do Fundador (private.platform_admins)
+select set_config('request.jwt.claims', '{"sub":"10000000-0000-0000-0000-000000000001","role":"authenticated","email":"owner-a@nexofab.test"}', true);
+set local role authenticated;
+select results_eq(
+  $$select public.is_platform_admin()$$,
+  $$values (false)$$,
+  'Proprietário comum de organização não é reconhecido como administrador da plataforma'
+);
+select throws_ok(
+  $$select public.get_founder_dashboard()$$,
+  'P0001',
+  'Acesso restrito ao fundador',
+  'Usuário comum é bloqueado em get_founder_dashboard()'
+);
+select throws_ok(
+  $$select public.founder_extend_trial('a0000000-0000-0000-0000-000000000001', 7, 'Tentativa indevida')$$,
+  'P0001',
+  'Acesso restrito ao fundador',
+  'Usuário comum é bloqueado em founder_extend_trial()'
+);
+reset role;
+
+insert into private.platform_admins (user_id, email, notes)
+values ('10000000-0000-0000-0000-000000000001', 'owner-a@nexofab.test', 'Teste fundador');
+
+select set_config('request.jwt.claims', '{"sub":"10000000-0000-0000-0000-000000000001","role":"authenticated","email":"owner-a@nexofab.test"}', true);
+set local role authenticated;
+select results_eq(
+  $$select public.is_platform_admin() and ((public.get_founder_dashboard() -> 'kpis' ->> 'totalOrganizations')::integer >= 3)$$,
+  $$values (true)$$,
+  'Fundador listado em private.platform_admins acessa get_founder_dashboard()'
 );
 reset role;
 
