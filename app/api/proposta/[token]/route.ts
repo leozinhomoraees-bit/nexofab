@@ -19,3 +19,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   if (!result?.saved || !result.status) return Response.json({ error: result?.error || "Não foi possível registrar sua resposta." }, { status: 409 });
   return Response.json(result);
 }
+
+export async function PATCH(_request: Request, { params }: { params: Promise<{ token: string }> }) {
+  const token = (await params).token;
+  if (!isQuoteToken(token)) return Response.json({ recorded: false }, { status: 404 });
+  const { data, error } = await createPublicClient().rpc("record_public_proposal_view", { p_token: token });
+  if (error) return Response.json({ recorded: false }, { status: 200 });
+  return Response.json(data ?? { recorded: false });
+}

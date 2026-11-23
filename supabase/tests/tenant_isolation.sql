@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(35);
+select plan(40);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password,
@@ -375,6 +375,62 @@ select throws_ok(
   '42501',
   null,
   'Perfil financeiro é bloqueado ao criar ordem de produção diretamente via RLS'
+);
+reset role;
+
+-- 36 a 40: Numeração sequencial independente por empresa (#1, #2...) e rastreio de visualização de proposta
+insert into public.organizations(id, trade_name) values
+  ('c0000000-0000-0000-0000-000000000003', 'Tenant C');
+
+insert into public.organization_members(organization_id, user_id, role, status) values
+  ('c0000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000001', 'owner', 'active');
+
+update public.profiles set active_organization_id = 'c0000000-0000-0000-0000-000000000003'
+where id = '10000000-0000-0000-0000-000000000001';
+
+select set_config('request.jwt.claims', '{"sub":"10000000-0000-0000-0000-000000000001","role":"authenticated","email":"owner-a@nexofab.test"}', true);
+set local role authenticated;
+
+insert into public.quotes(id, customer_name, phone, service, status, created_by)
+  values ('c4000000-0000-0000-0000-000000000001', 'Cliente C1', '11911112222', 'Fachada C1', 'aguardando_cliente', auth.uid());
+insert into public.quotes(id, customer_name, phone, service, status, created_by)
+  values ('c4000000-0000-0000-0000-000000000002', 'Cliente C2', '11911113333', 'Letra Caixa C2', 'novo', auth.uid());
+insert into public.proposal_shares(quote_id, token_hash)
+  values ('c4000000-0000-0000-0000-000000000001', encode(digest('token-view-tenant-c-0000000000000000000000000000', 'sha256'), 'hex'));
+
+select results_eq(
+  $$select number from public.quotes where id = 'c4000000-0000-0000-0000-000000000001'$$,
+  $$values (1::bigint)$$,
+  'Nova organização inicia numeração de orçamentos em #1 de forma independente'
+);
+
+select results_eq(
+  $$select number from public.quotes where id = 'c4000000-0000-0000-0000-000000000002'$$,
+  $$values (2::bigint)$$,
+  'Segundo orçamento da organização incrementa para #2 sequencialmente'
+);
+reset role;
+
+select set_config('request.jwt.claims', '{}', true);
+set local role anon;
+select results_eq(
+  $$select (public.record_public_proposal_view('token-view-tenant-c-0000000000000000000000000000') ->> 'viewCount')::integer$$,
+  $$values (1)$$,
+  'Abertura pública da proposta registra primeira visualização'
+);
+select results_eq(
+  $$select (public.record_public_proposal_view('token-view-tenant-c-0000000000000000000000000000') ->> 'recorded')::boolean$$,
+  $$values (false)$$,
+  'Recarregamento imediato da proposta respeita janela antispam sem duplicar contagem'
+);
+reset role;
+
+select set_config('request.jwt.claims', '{"sub":"20000000-0000-0000-0000-000000000002","role":"authenticated","email":"owner-b@nexofab.test"}', true);
+set local role authenticated;
+select results_eq(
+  $$select count(*)::bigint from public.management_notifications where quote_id = 'c4000000-0000-0000-0000-000000000001'$$,
+  $$values (0::bigint)$$,
+  'Notificação de visualização da proposta permanece isolada dentro do Tenant C'
 );
 reset role;
 

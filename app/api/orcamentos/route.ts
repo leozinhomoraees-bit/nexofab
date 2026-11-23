@@ -123,6 +123,17 @@ export async function GET(request: Request) {
   const receivablesResult = quoteIds.length && canViewCommercialFinance
     ? await supabase.from("receivable_installments").select("quote_id, amount, due_date, status").in("quote_id", quoteIds).in("status", ["pendente", "agendado"])
     : { data: [] };
+  const sharesResult = quoteIds.length && canViewCommercialFinance
+    ? await supabase.from("proposal_shares").select("quote_id, view_count, first_viewed_at, last_viewed_at").in("quote_id", quoteIds).is("revoked_at", null)
+    : { data: [] };
+  const sharesByQuote = new Map<string, { viewCount: number; firstViewedAt: string | null; lastViewedAt: string | null }>();
+  for (const share of sharesResult.data ?? []) {
+    sharesByQuote.set(share.quote_id, {
+      viewCount: Number(share.view_count ?? 0),
+      firstViewedAt: share.first_viewed_at ?? null,
+      lastViewedAt: share.last_viewed_at ?? null,
+    });
+  }
   const versionsByQuote = new Map<string, Array<{ id: string; version: number; approval_source: string; approved_at: string }>>();
   for (const version of versionsResult.data ?? []) {
     const current = versionsByQuote.get(version.quote_id) ?? [];
@@ -170,6 +181,9 @@ export async function GET(request: Request) {
     openBalance: receivablesByQuote.get(quote.id)?.open ?? 0,
     overdueBalance: receivablesByQuote.get(quote.id)?.overdue ?? 0,
     nextPaymentDue: receivablesByQuote.get(quote.id)?.nextDue ?? null,
+    viewCount: sharesByQuote.get(quote.id)?.viewCount ?? 0,
+    firstViewedAt: sharesByQuote.get(quote.id)?.firstViewedAt ?? null,
+    lastViewedAt: sharesByQuote.get(quote.id)?.lastViewedAt ?? null,
     items: [...(quote.quote_items ?? [])].sort((a, b) => a.sort_order - b.sort_order),
   })), pagination: { offset, limit, hasMore, nextOffset: offset + limit } });
 }

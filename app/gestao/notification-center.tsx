@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Bell, CalendarClock, CheckCheck, ExternalLink, Factory, FileCheck2, FileX2, MessageCircle } from "lucide-react";
+import { AlertTriangle, Bell, CalendarClock, CheckCheck, ExternalLink, Eye, Factory, FileCheck2, FileX2, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { whatsappUrl } from "@/lib/whatsapp";
 
@@ -11,7 +11,7 @@ type Notification = {
   title: string;
   message: string;
   quote_id?: string | null;
-  metadata?: { quoteNumber?: number; customer?: string; phone?: string; service?: string; value?: number; status?: string; productionOrderId?: string; dueAt?: string | null; virtual?: boolean } | null;
+  metadata?: { quoteNumber?: number; customer?: string; phone?: string; service?: string; value?: number; status?: string; productionOrderId?: string; dueAt?: string | null; virtual?: boolean; event?: string; viewCount?: number } | null;
   read_at?: string | null;
   created_at: string;
 };
@@ -91,7 +91,10 @@ export function NotificationCenter({ onOpenQuotes, onOpenProduction }: { onOpenQ
     const customer = notification.metadata?.customer || "cliente";
     const number = notification.metadata?.quoteNumber || "";
     const service = notification.metadata?.service ? ` sobre ${notification.metadata.service}` : "";
-    const destination = whatsappUrl(notification.metadata?.phone, `Olá, ${customer}! Recebemos a aprovação da proposta #${number}${service}. Obrigado pela confiança! Vamos alinhar a entrada, o prazo e os próximos passos da produção.`);
+    const message = notification.metadata?.event === "proposal_viewed"
+      ? `Olá, ${customer}! Tudo bem? Vi que você acessou a proposta #${number}${service}. Ficou alguma dúvida ou posso ajustar algum detalhe para fecharmos?`
+      : `Olá, ${customer}! Recebemos a aprovação da proposta #${number}${service}. Obrigado pela confiança! Vamos alinhar a entrada, o prazo e os próximos passos da produção.`;
+    const destination = whatsappUrl(notification.metadata?.phone, message);
     if (destination) window.open(destination, "_blank", "noopener,noreferrer");
     else if (notification.quote_id) onOpenQuotes(notification.quote_id);
   }
@@ -104,12 +107,13 @@ export function NotificationCenter({ onOpenQuotes, onOpenProduction }: { onOpenQ
       <header><div><small>CENTRAL DE AVISOS</small><b>Notificações</b></div>{unread > 0 && <Button size="sm" variant="ghost" onClick={() => void mark()}><CheckCheck/>Marcar lidas</Button>}</header>
       <div className="notification-list">
         {setupRequired ? <div className="notification-empty"><Bell/><b>Ativação pendente</b><p>Aplique a nova migração do Supabase para receber aprovações aqui.</p></div> : notifications.length ? notifications.map((notification) => {
-          const Icon = notification.type === "proposal_rejected" ? FileX2 : notification.type === "production_overdue" ? AlertTriangle : notification.type === "production_due" ? CalendarClock : notification.type === "production_pending" ? Factory : FileCheck2;
+          const isProposalViewed = notification.metadata?.event === "proposal_viewed";
+          const Icon = isProposalViewed ? Eye : notification.type === "proposal_rejected" ? FileX2 : notification.type === "production_overdue" ? AlertTriangle : notification.type === "production_due" ? CalendarClock : notification.type === "production_pending" ? Factory : FileCheck2;
           return <article key={notification.id} className={notification.read_at ? "" : "unread"}>
             <button type="button" className="notification-main" onClick={() => void openNotification(notification)}>
               <span className={`notification-icon ${notification.type}`}><Icon/></span><span><b>{notification.title}</b><p>{notification.message}</p><small>{relativeTime(notification.created_at)}</small></span>
             </button>
-            {notification.type === "proposal_approved" && <div className="notification-actions"><button type="button" onClick={() => void openNotification(notification)}><ExternalLink/>Abrir orçamento</button><button type="button" onClick={(event) => void openWhatsApp(event, notification)}><MessageCircle/>Falar no WhatsApp</button></div>}
+            {(notification.type === "proposal_approved" || isProposalViewed) && <div className="notification-actions"><button type="button" onClick={() => void openNotification(notification)}><ExternalLink/>Abrir orçamento</button><button type="button" onClick={(event) => void openWhatsApp(event, notification)}><MessageCircle/>Falar no WhatsApp</button></div>}
             {notification.type.startsWith("production_") && <div className="notification-actions"><button type="button" onClick={() => void openNotification(notification)}><Factory/>Abrir produção</button></div>}
           </article>;
         }) : <div className="notification-empty"><Bell/><b>Tudo em dia</b><p>As respostas dos clientes aparecerão aqui automaticamente.</p></div>}

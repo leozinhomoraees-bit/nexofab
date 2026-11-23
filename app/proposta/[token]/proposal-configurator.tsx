@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, CircleHelp, Layers3 } from "lucide-react";
 import { ProposalActions } from "./proposal-actions";
 
@@ -36,6 +36,20 @@ export function ProposalConfigurator({ items, token, status, quoteNumber, freigh
     return selected ? [[group, selected.id]] : [];
   }));
   const [selections, setSelections] = useState<Record<string, string>>(initial);
+
+  useEffect(() => {
+    const key = `nexofab-proposal-viewed:${token.slice(0, 16)}`;
+    try {
+      if (window.sessionStorage.getItem(key)) return;
+      window.sessionStorage.setItem(key, "1");
+    } catch {
+      // sessionStorage pode estar indisponível em modos privados restritos
+    }
+    void fetch(`/api/proposta/${encodeURIComponent(token)}`, {
+      method: "PATCH",
+      keepalive: true,
+    }).catch(() => undefined);
+  }, [token]);
   const selectedItems = groups.map(([group, entries]) => entries.find((item) => item.id === selections[group])).filter((item): item is ProposalItem => Boolean(item));
   const choicesComplete = groups.every(([group]) => Boolean(selections[group]));
   const subtotal = [...fixedItems, ...selectedItems].reduce((sum, item) => sum + Number(item.total ?? Number(item.quantity) * Number(item.unit_price)), 0);
