@@ -34,7 +34,7 @@ function Feedback({ message }: { message: string }) {
 
 type Dashboard = {
   permissions?: { finance: boolean; receivables: boolean };
-  onboarding?: { companyConfigured: boolean; pricingConfigured: boolean; portalEnabled: boolean; hasQuote: boolean };
+  onboarding?: { companyConfigured: boolean; pricingConfigured: boolean; portalEnabled: boolean; hasQuote: boolean; canManageDemo?: boolean; hasDemoData?: boolean };
   revenue: number; openQuotes: number; openQuoteValue: number; approvedQuotes: number; approvedPendingProduction: number; unpaidClosedQuotes: number; unpaidClosedValue: number; overdueReceivableQuotes: number; overdueReceivableValue: number; followUpQuotesDue: number; expiringQuotes: number; productionOrders: number; overdueProduction: number; criticalStock: number; customerCount: number;
   recentQuotes: Array<{ id: string; number: number; customerName: string; service: string; status: string; value: number; createdAt: string; validUntil?: string | null }>;
   productionByStage: Array<{ stage: string; count: number }>;
@@ -47,10 +47,25 @@ const overviewStatus: Record<string, string> = { novo: "Novo", em_analise: "Em a
 const stageLabel: Record<string, string> = { briefing: "Aguardando programação", arte: "Arte", aprovacao: "Aprovação", producao: "Produção", acabamento: "Acabamento", expedicao: "Expedição", instalacao: "Instalação", concluido: "Concluído", cancelado: "Cancelado" };
 
 export function OverviewPanel({ onNavigate }: { onNavigate: (section: string) => void }) {
+  const { notify } = useToast();
   const [data, setData] = useState<Dashboard>(emptyDashboard);
   const [loading, setLoading] = useState(true);
+  const [demoBusy, setDemoBusy] = useState(false);
   const load = useCallback(() => api<{ dashboard: Dashboard }>("/api/gestao/dashboard").then((result) => setData(result.dashboard)).finally(() => setLoading(false)), []);
   useEffect(() => { load().catch(() => setLoading(false)); }, [load]);
+
+  async function toggleDemoData(mode: "seed" | "clear") {
+    setDemoBusy(true);
+    try {
+      const result = await api<{ message: string }>("/api/gestao/exemplo", { method: mode === "seed" ? "POST" : "DELETE" });
+      notify(result.message);
+      await load();
+    } catch (error) {
+      notify((error as Error).message, "error");
+    } finally {
+      setDemoBusy(false);
+    }
+  }
   const empty = !loading && data.revenue === 0 && data.openQuotes === 0 && data.productionOrders === 0 && data.criticalStock === 0;
   const maxStage = Math.max(...data.productionByStage.map((item) => item.count), 1);
   const breakEvenNegative = data.breakEven.configured && data.breakEven.grossRevenue > 0 && data.breakEven.contributionRate <= 0;
@@ -93,7 +108,23 @@ export function OverviewPanel({ onNavigate }: { onNavigate: (section: string) =>
             </button>
           ))}
         </div>
+        {data.onboarding?.canManageDemo && !data.onboarding.hasQuote && !data.onboarding.hasDemoData && (
+          <div className="onboarding-demo-bar">
+            <span><Sparkles/>Quer explorar o sistema preenchido em 10 segundos? Carregue um conjunto de exemplo (insumos, máquina, cliente e orçamento).</span>
+            <Button type="button" size="sm" variant="outline" disabled={demoBusy} onClick={() => void toggleDemoData("seed")}>
+              <Sparkles/>{demoBusy ? "Carregando..." : "Carregar dados de exemplo"}
+            </Button>
+          </div>
+        )}
       </section>
+    )}
+    {!loading && data.onboarding?.canManageDemo && data.onboarding.hasDemoData && (
+      <div className="onboarding-demo-bar active">
+        <span><Sparkles/>Existem registros demonstrativos <b>[Exemplo]</b> nesta empresa. Quando começar a operar de verdade, remova tudo com 1 clique.</span>
+        <Button type="button" size="sm" variant="outline" disabled={demoBusy} onClick={() => void toggleDemoData("clear")}>
+          <X/>{demoBusy ? "Removendo..." : "Remover dados de exemplo"}
+        </Button>
+      </div>
     )}
     {canViewFinance && <section className={`overview-break-even ${breakEvenReady ? "ready" : breakEvenNegative ? "danger" : "pending"}`}>
       <div className={`overview-break-even-ring ${breakEvenNegative ? "negative" : ""}`} style={{ "--progress": `${breakEvenReady ? Math.min(Math.max(data.breakEven.progress, 0), 100) : 0}%` } as React.CSSProperties}><div><b>{breakEvenReady ? `${Math.round(data.breakEven.progress)}%` : breakEvenNegative ? `${data.breakEven.contributionRate.toFixed(1)}%` : "—"}</b><span>{breakEvenNegative ? "margem" : "da meta"}</span></div></div>
