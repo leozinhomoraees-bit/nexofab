@@ -1473,6 +1473,359 @@ main.min-h-screen, main.min-h-screen * { font-family:"Sora",sans-serif; }
   box-shadow: 0 6px 16px rgba(13, 133, 123, 0.25);
 }
 
+/* 9. Quadros Kanban Drag & Drop (Produção PCP + Funil de Orçamentos) */
+.view-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid #d7e4e7;
+  border-radius: 10px;
+  background: #f1f6f7;
+}
+.view-mode-toggle button {
+  min-height: 32px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #4f6970;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.view-mode-toggle button svg {
+  width: 14px;
+  height: 14px;
+}
+.view-mode-toggle button:hover {
+  color: #0d2c36;
+}
+.view-mode-toggle button.active {
+  background: #081927;
+  color: #ffffff;
+  box-shadow: 0 3px 10px rgba(8, 25, 39, 0.18);
+}
+.view-mode-toggle button.active svg {
+  color: #c6f054;
+}
+
+.pcp-kanban-board {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 6px 2px 18px;
+  align-items: flex-start;
+  scrollbar-width: thin;
+  scrollbar-color: #bfd1d6 transparent;
+}
+.pcp-kanban-col {
+  flex: 0 0 286px;
+  min-height: 420px;
+  max-height: calc(100vh - 230px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #dde7ea;
+  border-top: 3px solid #0e8b81;
+  border-radius: 14px;
+  background: #eef3f5;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.pcp-kanban-col.stage-briefing,
+.pcp-kanban-col.quote-col-novo { border-top-color: #4a6b8a; }
+.pcp-kanban-col.stage-arte,
+.pcp-kanban-col.quote-col-em_analise { border-top-color: #3a6fd8; }
+.pcp-kanban-col.stage-aprovacao,
+.pcp-kanban-col.quote-col-aguardando_cliente { border-top-color: #d98a18; }
+.pcp-kanban-col.stage-producao { border-top-color: #0e8b81; }
+.pcp-kanban-col.stage-acabamento { border-top-color: #7c4ec4; }
+.pcp-kanban-col.stage-expedicao { border-top-color: #0891b2; }
+.pcp-kanban-col.stage-instalacao { border-top-color: #df6423; }
+.pcp-kanban-col.stage-concluido,
+.pcp-kanban-col.quote-col-aprovado,
+.pcp-kanban-col.quote-col-convertido { border-top-color: #12805c; }
+
+.pcp-kanban-col.drag-over {
+  border-color: #0e8b81;
+  background: #e1f5f1;
+  box-shadow: 0 0 0 2px rgba(14, 139, 129, 0.24), 0 12px 28px rgba(14, 139, 129, 0.12);
+}
+.pcp-kanban-col>header {
+  padding: 13px 14px 10px;
+  display: grid;
+  gap: 4px;
+  border-bottom: 1px solid #dfe8eb;
+}
+.pcp-kanban-col>header>div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pcp-kanban-col>header b {
+  color: #102a33;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.pcp-kanban-col>header span {
+  min-width: 24px;
+  height: 22px;
+  padding: 0 7px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #173a42;
+  font-size: 11px;
+  font-weight: 800;
+  box-shadow: 0 1px 2px rgba(8, 25, 39, 0.06);
+}
+.pcp-kanban-col>header small {
+  color: #547077;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.pcp-kanban-cards {
+  padding: 10px;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  overflow-y: auto;
+  flex: 1;
+}
+.pcp-kanban-empty {
+  margin: 0;
+  padding: 26px 14px;
+  border: 1.5px dashed #cbd9dd;
+  border-radius: 10px;
+  color: #70888f;
+  font-size: 12px;
+  text-align: center;
+}
+.pcp-kanban-card {
+  padding: 12px 13px;
+  display: grid;
+  gap: 9px;
+  border: 1px solid #dce6e9;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(8, 25, 39, 0.04), 0 4px 12px rgba(8, 25, 39, 0.04);
+  cursor: grab;
+  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease, opacity 0.14s ease;
+}
+.pcp-kanban-card:active {
+  cursor: grabbing;
+}
+.pcp-kanban-card:hover {
+  border-color: #98cfc8;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(13, 133, 123, 0.1);
+}
+.pcp-kanban-card.dragging {
+  opacity: 0.42;
+  transform: scale(0.98);
+}
+.pcp-kanban-card.moving {
+  opacity: 0.72;
+}
+.pcp-kanban-card.overdue {
+  border-left: 3.5px solid #d4442f;
+  background: linear-gradient(180deg, #fff9f8 0%, #ffffff 36%);
+}
+.pcp-kanban-card.due-soon {
+  border-left: 3.5px solid #df991d;
+}
+.pcp-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pcp-card-grip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #5b747c;
+  font-size: 12px;
+}
+.pcp-card-grip svg {
+  width: 14px;
+  height: 14px;
+  color: #93a7ad;
+}
+.pcp-card-grip b {
+  color: #102d36;
+  font-size: 12.5px;
+  font-weight: 800;
+}
+.pcp-card-grip small {
+  color: #6b848b;
+  font-size: 11px;
+  font-weight: 600;
+}
+.pcp-card-top em {
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pcp-card-top em.priority-urgente { background: #ffe7e2; color: #b53422; }
+.pcp-card-top em.priority-alta { background: #fff1db; color: #a36211; }
+.pcp-card-top em.priority-normal { background: #eef4f6; color: #4a656d; }
+.pcp-card-top em.priority-baixa { background: #f2f5f6; color: #71878e; }
+.pcp-card-body {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+}
+.pcp-card-body h3 {
+  margin: 0;
+  color: #0f2830;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pcp-card-body:hover h3 {
+  color: #0d857b;
+}
+.pcp-card-body p {
+  margin: 0;
+  color: #5f777e;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pcp-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.pcp-tag {
+  padding: 2px 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.pcp-tag svg {
+  width: 11px;
+  height: 11px;
+}
+.pcp-tag.ok { background: #e4f7f2; color: #0c7569; }
+.pcp-tag.danger { background: #ffece7; color: #b53825; }
+.pcp-tag.neutral { background: #eff4f6; color: #4b646b; }
+.pcp-card-meta {
+  padding-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid #eef3f5;
+}
+.pcp-due-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #5b737a;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.pcp-due-pill svg {
+  width: 12px;
+  height: 12px;
+}
+.pcp-due-pill.overdue {
+  color: #bd3824;
+  font-weight: 800;
+}
+.pcp-due-pill.due-soon {
+  color: #9f6310;
+  font-weight: 800;
+}
+.pcp-card-meta strong {
+  color: #10323b;
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.pcp-kanban-card>footer {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pcp-kanban-card>footer button {
+  flex: 1;
+  min-height: 30px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid #d7e4e6;
+  border-radius: 8px;
+  background: #f8fbfb;
+  color: #294951;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+.pcp-kanban-card>footer button svg {
+  width: 12px;
+  height: 12px;
+}
+.pcp-kanban-card>footer button:hover {
+  border-color: #93cec7;
+  background: #ecf8f6;
+  color: #0b6e66;
+}
+.pcp-kanban-card>footer button.primary {
+  border-color: #0e8b81;
+  background: #0e8b81;
+  color: #ffffff;
+}
+.pcp-kanban-card>footer button.primary:hover {
+  background: #0a746b;
+  border-color: #0a746b;
+  color: #ffffff;
+}
+
+@media(min-width:1420px) {
+  .quote-kanban-board .pcp-kanban-col {
+    flex: 1 1 0;
+    min-width: 245px;
+  }
+}
+@media(max-width:768px) {
+  .pcp-kanban-col {
+    flex: 0 0 82vw;
+    max-height: 70vh;
+  }
+}
+
 /* Melhorias mobile para chão de fábrica (Produção, Estoque, Orçamentos e Financeiro) */
 @media(max-width:768px){
   .dash-main { padding:18px 14px 36px; }

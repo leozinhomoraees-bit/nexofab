@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowRight, Boxes, CalendarClock, Check, CheckCircle2, CircleDollarSign, ClipboardCheck, ClipboardList, Factory, FileText, Gauge, MessageCircle, PackageCheck, Play, Plus, Printer, RefreshCw, Sparkles, Target, TrendingUp, Users, WalletCards, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Boxes, CalendarClock, Check, CheckCircle2, CircleDollarSign, ClipboardCheck, ClipboardList, Columns3, Factory, FileText, Gauge, GripVertical, LayoutGrid, MessageCircle, PackageCheck, Palette, Play, Plus, Printer, RefreshCw, Sparkles, Target, TrendingUp, Users, WalletCards, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -206,19 +206,47 @@ type ProductionReminder = { order: ProductionOrder; kind: "overdue" | "due" | "p
 type ProductionUpdateResult = { ok: boolean; stockDeducted?: boolean; negativeStockAllowed?: boolean; error?: string };
 type ProductionChanges = Record<string, string | boolean | null>;
 const stages = ["briefing", "arte", "aprovacao", "producao", "acabamento", "expedicao", "instalacao", "concluido", "cancelado"];
+const kanbanStages = ["briefing", "arte", "aprovacao", "producao", "acabamento", "expedicao", "instalacao", "concluido"] as const;
+const kanbanShortLabel: Record<string, string> = {
+  briefing: "A programar",
+  arte: "Arte",
+  aprovacao: "Aprovação",
+  producao: "Produção",
+  acabamento: "Acabamento",
+  expedicao: "Expedição",
+  instalacao: "Instalação",
+  concluido: "Concluído",
+};
 const priorities = ["baixa", "normal", "alta", "urgente"];
+const productionViewStorageKey = "nexofab-production-view";
 
 export function ProductionPanel({ search }: { search: string }) {
   const { notify } = useToast();
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
   const [selected, setSelected] = useState<ProductionOrder | null>(null);
+  const [selectedAutoFinalize, setSelectedAutoFinalize] = useState(false);
   const [staff, setStaff] = useState<ProductionStaff[]>([]);
   const [advancedControl, setAdvancedControl] = useState(true);
   const [stageFilter, setStageFilter] = useState("ativos");
+  const [viewMode, setViewMode] = useState<"kanban" | "grid">("kanban");
+  const [dragOrderId, setDragOrderId] = useState<string | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<string | null>(null);
+  const [movingOrderId, setMovingOrderId] = useState<string | null>(null);
   const [hasMoreOrders, setHasMoreOrders] = useState(false);
   const [loadingMoreOrders, setLoadingMoreOrders] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      const saved = window.localStorage.getItem(productionViewStorageKey);
+      if (saved === "grid" || saved === "kanban") setViewMode(saved);
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, []);
+  const switchView = (mode: "kanban" | "grid") => {
+    setViewMode(mode);
+    try { window.localStorage.setItem(productionViewStorageKey, mode); } catch { /* ignore */ }
+  };
   const load = useCallback(() => api<{ orders: ProductionOrder[]; staff?: ProductionStaff[]; advancedControl?: boolean; pagination?: { hasMore: boolean } }>("/api/gestao/producao?limit=100&offset=0").then((result) => { setOrders(result.orders); setHasMoreOrders(Boolean(result.pagination?.hasMore)); setStaff(result.staff ?? []); setAdvancedControl(result.advancedControl !== false); setSelected((current) => current ? result.orders.find((order) => order.id === current.id) ?? null : null); }).finally(() => setLoading(false)), []);
   const loadMoreOrders = useCallback(async () => {
     if (loadingMoreOrders || !hasMoreOrders) return;
@@ -248,12 +276,28 @@ export function ProductionPanel({ search }: { search: string }) {
     else if (order.stage === "briefing") list.push({ order, kind: "pending", title: "Orçamento aceito — programar", text: "Confira entrada, arquivo, materiais e defina quem produzirá." });
     return list;
   }, []).sort((a, b) => ({ overdue: 0, due: 1, pending: 2 }[a.kind] - { overdue: 0, due: 1, pending: 2 }[b.kind]));
+  const matchesSearchTerm = (order: ProductionOrder) => `${order.number} ${order.title} ${order.stage} ${order.quotes?.customer_name ?? ""} ${order.quotes?.company ?? ""} ${order.quotes?.service ?? ""}`.toLowerCase().includes(search.toLowerCase());
   const filtered = orders.filter((order) => {
-    const matchesSearch = `${order.number} ${order.title} ${order.stage} ${order.quotes?.customer_name ?? ""} ${order.quotes?.service ?? ""}`.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = matchesSearchTerm(order);
     const overdue = !["concluido", "cancelado"].includes(order.stage) && Boolean(order.due_at) && order.due_at!.slice(0, 10) < today;
     const matchesStage = stageFilter === "todos" || (stageFilter === "ativos" && !["concluido", "cancelado"].includes(order.stage)) || (stageFilter === "aguardando_programacao" && order.stage === "briefing") || (stageFilter === "em_producao" && ["producao", "acabamento", "expedicao", "instalacao"].includes(order.stage)) || (stageFilter === "atrasados" && overdue) || order.stage === stageFilter;
     return matchesSearch && matchesStage;
   });
+  const kanbanOrders = orders.filter((order) => {
+    if (order.stage === "cancelado") return false;
+    if (!matchesSearchTerm(order)) return false;
+    if (stageFilter === "atrasados") return !["concluido", "cancelado"].includes(order.stage) && Boolean(order.due_at) && order.due_at!.slice(0, 10) < today;
+    return true;
+  });
+  const visibleKanbanStages: readonly string[] =
+    stageFilter === "aguardando_programacao"
+      ? ["briefing", "arte", "aprovacao"]
+      : stageFilter === "em_producao"
+        ? ["producao", "acabamento", "expedicao", "instalacao", "concluido"]
+        : stageFilter === "concluido"
+          ? ["expedicao", "instalacao", "concluido"]
+          : kanbanStages;
+  const staffMap = useMemo(() => new Map(staff.map((person) => [person.id, person.full_name || "Equipe"])), [staff]);
   const summary = { active: orders.filter((order) => !["concluido", "cancelado"].includes(order.stage)).length, awaiting: orders.filter((order) => order.stage === "briefing").length, overdue: orders.filter((order) => !["concluido", "cancelado"].includes(order.stage) && Boolean(order.due_at) && order.due_at!.slice(0, 10) < today).length, inProduction: orders.filter((order) => ["producao", "acabamento", "expedicao", "instalacao"].includes(order.stage)).length, completed: orders.filter((order) => order.stage === "concluido").length };
   async function update(id: string, changes: ProductionChanges, success = "Etapa atualizada."): Promise<ProductionUpdateResult> {
     try {
@@ -267,14 +311,119 @@ export function ProductionPanel({ search }: { search: string }) {
       return { ok: false, error: errorMessage };
     }
   }
+  async function moveOrderStage(orderId: string, targetStage: string) {
+    const order = orders.find((item) => item.id === orderId);
+    setDragOrderId(null);
+    setDragOverStage(null);
+    if (!order || order.stage === targetStage) return;
+    if (targetStage === "concluido") {
+      setSelected(order);
+      setSelectedAutoFinalize(true);
+      notify(`Confirme a conferência de estoque para concluir a OS-${order.number}.`, "info");
+      return;
+    }
+    const previousOrders = orders;
+    setMovingOrderId(order.id);
+    setOrders((current) => current.map((item) => item.id === order.id ? { ...item, stage: targetStage } : item));
+    const response = await update(order.id, { stage: targetStage }, `OS-${order.number} movida para ${kanbanShortLabel[targetStage] ?? targetStage}.`);
+    setMovingOrderId(null);
+    if (response.ok) {
+      notify(`OS-${order.number} movida para ${kanbanShortLabel[targetStage] ?? targetStage}.`, "success");
+    } else {
+      setOrders(previousOrders);
+      notify(response.error ?? "Não foi possível mover a ordem de serviço.", "error");
+    }
+  }
   function contact(order: ProductionOrder) { const destination = whatsappUrl(order.quotes?.phone, `Olá, ${order.quotes?.customer_name ?? "cliente"}! Estamos atualizando a produção do seu pedido #${order.quotes?.number ?? order.number} — ${order.quotes?.service ?? order.title}. A etapa atual é: ${stageLabel[order.stage] ?? order.stage}.`); if (!destination) { setMessage("Cadastre um WhatsApp válido no cliente deste pedido antes de enviar a atualização."); return; } window.open(destination, "_blank", "noopener,noreferrer"); }
-  return <><SectionHeading eyebrow="CHÃO DE FÁBRICA" title="Produção" description="Acompanhe prazos, imprima a ordem de serviço e conclua o trabalho com baixa automática dos materiais."/>
+  return <><SectionHeading eyebrow="CHÃO DE FÁBRICA · PCP" title="Produção" description="Arraste ordens entre etapas no quadro Kanban, acompanhe prazos e conclua com baixa automática de materiais."/>
     <section className="production-kpis"><button type="button" className={stageFilter === "ativos" ? "active" : ""} onClick={() => setStageFilter("ativos")}><ClipboardCheck/><span><small>ORDENS ATIVAS</small><b>{summary.active}</b></span></button><button type="button" className={stageFilter === "aguardando_programacao" ? "active" : ""} onClick={() => setStageFilter("aguardando_programacao")}><Sparkles/><span><small>A PROGRAMAR</small><b>{summary.awaiting}</b></span></button><button type="button" className={stageFilter === "em_producao" ? "active" : ""} onClick={() => setStageFilter("em_producao")}><Play/><span><small>EM PRODUÇÃO</small><b>{summary.inProduction}</b></span></button><button type="button" className={`${summary.overdue ? "danger" : ""} ${stageFilter === "atrasados" ? "active" : ""}`} onClick={() => setStageFilter("atrasados")}><CalendarClock/><span><small>PRAZO VENCIDO</small><b>{summary.overdue}</b></span></button><button type="button" className={stageFilter === "concluido" ? "active" : ""} onClick={() => setStageFilter("concluido")}><CheckCircle2/><span><small>CONCLUÍDAS</small><b>{summary.completed}</b></span></button></section>
-    {reminders.length > 0 && <section className="production-reminders"><header><div><small>LEMBRETES AUTOMÁTICOS</small><h2>O que precisa de atenção agora</h2><p>Os avisos permanecem ativos até a etapa ou o prazo da ordem ser atualizado.</p></div><span>{reminders.length} pendência(s)</span></header><div>{reminders.slice(0, 8).map(({ order, kind, title, text }) => <button type="button" key={`${order.id}-${kind}`} className={kind} onClick={() => setSelected(order)}><span>{kind === "overdue" ? <AlertTriangle/> : kind === "due" ? <CalendarClock/> : <Factory/>}</span><div><small>{title}</small><b>OS-{order.number} · {order.quotes?.company || order.quotes?.customer_name || "Cliente"}</b><p>{order.quotes?.service || order.title}</p><em>{text}</em></div><ArrowRight/></button>)}</div></section>}
-    <Feedback message={message}/><div className="production-toolbar"><label>Visualizar<select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}><option value="ativos">Ordens ativas</option><option value="aguardando_programacao">Aguardando programação</option><option value="em_producao">Em produção e acabamento</option><option value="atrasados">Prazo vencido</option><option value="todos">Todas</option>{stages.map((stage) => <option key={stage} value={stage}>{stageLabel[stage]}</option>)}</select></label><span>{filtered.length} ordem(ns)</span><Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw/>Atualizar</Button></div>
-    {!loading && !filtered.length ? <EmptyState icon={Factory} title="Nenhuma ordem neste filtro" text="Ao fechar um orçamento, a ordem de serviço será criada automaticamente aqui."/> : <div className="production-order-grid">{filtered.map((order) => { const overdue = !["concluido", "cancelado"].includes(order.stage) && Boolean(order.due_at) && order.due_at!.slice(0, 10) < today; return <article key={order.id} className={overdue ? "overdue" : ""}><header><span>OS-{order.number}</span><em className={`priority-${order.priority}`}>{order.priority}</em></header><h3>{order.quotes?.service || order.title}</h3><p>{order.quotes?.company || order.quotes?.customer_name || "Cliente não vinculado"}</p><div><span><small>Etapa</small><b>{stageLabel[order.stage] ?? order.stage}</b></span><span><small>Prazo</small><b>{showDate(order.due_at)}</b></span><span><small>Valor</small><b>{currency.format(Number(order.quotes?.estimated_value ?? 0))}</b></span></div><footer><Button size="sm" variant="outline" onClick={() => contact(order)}><MessageCircle/>Cliente</Button><Button size="sm" onClick={() => setSelected(order)}><FileText/>Abrir OS</Button></footer></article>; })}</div>}
+    {reminders.length > 0 && <section className="production-reminders"><header><div><small>LEMBRETES AUTOMÁTICOS</small><h2>O que precisa de atenção agora</h2><p>Os avisos permanecem ativos até a etapa ou o prazo da ordem ser atualizado.</p></div><span>{reminders.length} pendência(s)</span></header><div>{reminders.slice(0, 8).map(({ order, kind, title, text }) => <button type="button" key={`${order.id}-${kind}`} className={kind} onClick={() => { setSelectedAutoFinalize(false); setSelected(order); }}><span>{kind === "overdue" ? <AlertTriangle/> : kind === "due" ? <CalendarClock/> : <Factory/>}</span><div><small>{title}</small><b>OS-{order.number} · {order.quotes?.company || order.quotes?.customer_name || "Cliente"}</b><p>{order.quotes?.service || order.title}</p><em>{text}</em></div><ArrowRight/></button>)}</div></section>}
+    <Feedback message={message}/><div className="production-toolbar"><label>Visualizar<select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}><option value="ativos">Ordens ativas</option><option value="aguardando_programacao">Aguardando programação</option><option value="em_producao">Em produção e acabamento</option><option value="atrasados">Prazo vencido</option><option value="todos">Todas</option>{stages.map((stage) => <option key={stage} value={stage}>{stageLabel[stage]}</option>)}</select></label><div className="view-mode-toggle" role="group" aria-label="Modo de visualização da produção"><button type="button" className={viewMode === "kanban" ? "active" : ""} onClick={() => switchView("kanban")}><Columns3/>Kanban PCP</button><button type="button" className={viewMode === "grid" ? "active" : ""} onClick={() => switchView("grid")}><LayoutGrid/>Grade</button></div><span>{viewMode === "kanban" ? kanbanOrders.length : filtered.length} ordem(ns)</span><Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw/>Atualizar</Button></div>
+    {!loading && !(viewMode === "kanban" ? kanbanOrders.length : filtered.length) ? <EmptyState icon={Factory} title="Nenhuma ordem neste filtro" text="Ao fechar um orçamento, a ordem de serviço será criada automaticamente aqui."/> : viewMode === "kanban" ? (
+      <div className="pcp-kanban-board" role="region" aria-label="Quadro Kanban de Produção">
+        {visibleKanbanStages.map((stageKey) => {
+          const columnOrders = kanbanOrders.filter((order) => order.stage === stageKey);
+          const displayOrders = stageKey === "concluido" ? columnOrders.slice(0, 15) : columnOrders;
+          const columnTotal = columnOrders.reduce((sum, order) => sum + Number(order.quotes?.estimated_value ?? 0), 0);
+          const isOver = dragOverStage === stageKey;
+          return (
+            <section
+              key={stageKey}
+              className={`pcp-kanban-col stage-${stageKey} ${isOver ? "drag-over" : ""}`}
+              onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; if (dragOverStage !== stageKey) setDragOverStage(stageKey); }}
+              onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragOverStage((cur) => cur === stageKey ? null : cur); }}
+              onDrop={(event) => { event.preventDefault(); const droppedId = event.dataTransfer.getData("text/plain") || dragOrderId; if (droppedId) void moveOrderStage(droppedId, stageKey); }}
+            >
+              <header>
+                <div>
+                  <b>{kanbanShortLabel[stageKey] ?? stageKey}</b>
+                  <span>{columnOrders.length}</span>
+                </div>
+                <small>{columnTotal > 0 ? currency.format(columnTotal) : "Sem valor"}</small>
+              </header>
+              <div className="pcp-kanban-cards">
+                {displayOrders.length === 0 ? (
+                  <p className="pcp-kanban-empty">{stageKey === "concluido" ? "Arraste aqui para finalizar OS" : "Arraste uma OS para cá"}</p>
+                ) : displayOrders.map((order) => {
+                  const due = order.due_at?.slice(0, 10);
+                  const isClosed = order.stage === "concluido";
+                  const overdue = !isClosed && Boolean(due) && due! < today;
+                  const dueSoon = !isClosed && !overdue && Boolean(due) && due! <= dueSoonLimit;
+                  const shortage = (order.production_material_reservations ?? []).some((item) => item.status === "insuficiente");
+                  const latestArt = order.production_artwork_approvals?.[0];
+                  const ownerName = order.responsible_id ? staffMap.get(order.responsible_id) : null;
+                  return (
+                    <article
+                      key={order.id}
+                      draggable={!isClosed && movingOrderId !== order.id}
+                      onDragStart={(event) => {
+                        setDragOrderId(order.id);
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/plain", order.id);
+                      }}
+                      onDragEnd={() => { setDragOrderId(null); setDragOverStage(null); }}
+                      className={`pcp-kanban-card ${overdue ? "overdue" : dueSoon ? "due-soon" : ""} ${dragOrderId === order.id ? "dragging" : ""} ${movingOrderId === order.id ? "moving" : ""}`}
+                    >
+                      <div className="pcp-card-top">
+                        <span className="pcp-card-grip" title="Arraste para mudar de etapa">
+                          {!isClosed && <GripVertical />}
+                          <b>OS-{order.number}</b>
+                        </span>
+                        <em className={`priority-${order.priority}`}>{order.priority}</em>
+                      </div>
+                      <button type="button" className="pcp-card-body" onClick={() => { setSelectedAutoFinalize(false); setSelected(order); }}>
+                        <h3>{order.quotes?.service || order.title}</h3>
+                        <p>{order.quotes?.company || order.quotes?.customer_name || "Cliente não vinculado"}</p>
+                      </button>
+                      {(shortage || latestArt || ownerName) && (
+                        <div className="pcp-card-tags">
+                          {shortage && <span className="pcp-tag danger"><AlertTriangle/>Falta material</span>}
+                          {latestArt && <span className={`pcp-tag ${latestArt.status === "aprovada" ? "ok" : latestArt.status === "ajustes" ? "danger" : "neutral"}`}><Palette/>Arte: {latestArt.status}</span>}
+                          {ownerName && <span className="pcp-tag neutral">{ownerName.split(" ")[0]}</span>}
+                        </div>
+                      )}
+                      <div className="pcp-card-meta">
+                        <span className={`pcp-due-pill ${overdue ? "overdue" : dueSoon ? "due-soon" : ""}`}>
+                          <CalendarClock/>
+                          {order.due_at ? (overdue ? `Atrasada · ${showDate(order.due_at)}` : showDate(order.due_at)) : "Sem prazo"}
+                        </span>
+                        <strong>{currency.format(Number(order.quotes?.estimated_value ?? 0))}</strong>
+                      </div>
+                      <footer>
+                        <button type="button" onClick={() => contact(order)} title="Avisar cliente no WhatsApp"><MessageCircle/>WhatsApp</button>
+                        <button type="button" className="primary" onClick={() => { setSelectedAutoFinalize(false); setSelected(order); }}><FileText/>Abrir OS</button>
+                      </footer>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    ) : <div className="production-order-grid">{filtered.map((order) => { const overdue = !["concluido", "cancelado"].includes(order.stage) && Boolean(order.due_at) && order.due_at!.slice(0, 10) < today; return <article key={order.id} className={overdue ? "overdue" : ""}><header><span>OS-{order.number}</span><em className={`priority-${order.priority}`}>{order.priority}</em></header><h3>{order.quotes?.service || order.title}</h3><p>{order.quotes?.company || order.quotes?.customer_name || "Cliente não vinculado"}</p><div><span><small>Etapa</small><b>{stageLabel[order.stage] ?? order.stage}</b></span><span><small>Prazo</small><b>{showDate(order.due_at)}</b></span><span><small>Valor</small><b>{currency.format(Number(order.quotes?.estimated_value ?? 0))}</b></span></div><footer><Button size="sm" variant="outline" onClick={() => contact(order)}><MessageCircle/>Cliente</Button><Button size="sm" onClick={() => { setSelectedAutoFinalize(false); setSelected(order); }}><FileText/>Abrir OS</Button></footer></article>; })}</div>}
     {hasMoreOrders && <div className="list-load-more"><span>Exibindo {orders.length} ordem(ns) carregada(s). Há ordens mais antigas disponíveis.</span><Button type="button" variant="outline" onClick={() => void loadMoreOrders()} disabled={loadingMoreOrders}>{loadingMoreOrders ? "Carregando..." : "Carregar mais ordens"}</Button></div>}
-    {selected && <ProductionOrderDialog order={selected} staff={staff} advancedControl={advancedControl} onClose={() => setSelected(null)} onUpdate={update} onRefresh={load} onWhatsApp={() => contact(selected)}/>}</>;
+    {selected && <ProductionOrderDialog key={`${selected.id}-${selectedAutoFinalize ? "fin" : "std"}`} order={selected} staff={staff} advancedControl={advancedControl} initialFinalize={selectedAutoFinalize} onClose={() => { setSelected(null); setSelectedAutoFinalize(false); }} onUpdate={update} onRefresh={load} onWhatsApp={() => contact(selected)}/>}</>;
 }
 
 function LegacyProductionOrderDialog({ order, staff, advancedControl, onClose, onUpdate, onRefresh, onWhatsApp }: { order: ProductionOrder; staff: ProductionStaff[]; advancedControl: boolean; onClose: () => void; onUpdate: (id: string, changes: ProductionChanges, success?: string) => Promise<ProductionUpdateResult>; onRefresh: () => Promise<void>; onWhatsApp: () => void }) {
@@ -291,7 +440,7 @@ function LegacyProductionOrderDialog({ order, staff, advancedControl, onClose, o
   return <div className="workspace-modal production-order-modal" role="dialog" aria-modal="true" aria-label={`Ordem de serviço ${order.number}`} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className="workspace-dialog production-order-dialog"><div className="production-order-sheet"><header><div><small>NEXOFAB · ORDEM DE SERVIÇO</small><h2>OS-{order.number}</h2><p>Gerada em {showDate(order.created_at)} · Orçamento #{order.quotes?.number ?? "—"}</p></div><Button type="button" size="icon" variant="ghost" onClick={onClose} className="no-print"><X/></Button></header><section className="production-order-identity"><div><small>CLIENTE</small><b>{order.quotes?.company || order.quotes?.customer_name || "—"}</b><span>{order.quotes?.customer_name}{order.quotes?.phone ? ` · ${order.quotes.phone}` : ""}</span></div><div><small>PROJETO</small><b>{order.quotes?.service || order.title}</b><span>{order.quotes?.payment_terms || "Condição de pagamento não informada"}</span></div><div><small>PRAZO</small><b>{showDate(order.due_at)}</b><span>Prioridade {order.priority}</span></div></section><section className="production-order-items"><h3>Itens para produzir</h3>{items.length ? items.map((item, index) => <article key={item.id}><span>{index + 1}</span><div><b>{item.description}</b><small>{[item.material, item.service_type].filter(Boolean).join(" · ") || "Sem material informado"}{item.width_mm && item.height_mm ? ` · ${item.width_mm} × ${item.height_mm}${item.depth_mm ? ` × ${item.depth_mm}` : ""} mm` : ""}</small>{item.production_notes && <p>{item.production_notes}</p>}</div><strong>{Number(item.quantity)} {item.unit}</strong></article>) : <p className="production-order-empty">Este orçamento não possui itens detalhados.</p>}</section>{(order.quotes?.details || order.quotes?.internal_notes) && <section className="production-order-notes"><h3>Orientações</h3>{order.quotes?.details && <p><b>Escopo:</b> {order.quotes.details}</p>}{order.quotes?.internal_notes && <p><b>Observação interna:</b> {order.quotes.internal_notes}</p>}</section>}<form className="production-order-control no-print" onSubmit={save}><h3>Controle da ordem</h3><div><label>Etapa<select value={stage} onChange={(event) => setStage(event.target.value)}>{stages.map((item) => <option key={item} value={item}>{stageLabel[item]}</option>)}</select></label><label>Prioridade<select value={priority} onChange={(event) => setPriority(event.target.value)}>{priorities.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label>Prazo<Input type="date" value={dueAt} onChange={(event) => setDueAt(event.target.value)}/></label></div><label>Instruções da produção<textarea rows={4} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Acabamento, instalação e observações"/></label><footer><Button type="button" variant="outline" onClick={onWhatsApp}><MessageCircle/>Avisar cliente</Button><Button type="button" variant="outline" onClick={() => window.print()}><Printer/>Imprimir / salvar PDF</Button><Button type="submit"><Check/>Salvar alterações</Button></footer></form><footer className="production-order-signatures"><span>Responsável pela produção</span><span>Conferência / entrega</span></footer></div></div></div>;
 }
 
-function ProductionOrderDialog({ order, staff, advancedControl, onClose, onUpdate, onRefresh, onWhatsApp }: { order: ProductionOrder; staff: ProductionStaff[]; advancedControl: boolean; onClose: () => void; onUpdate: (id: string, changes: ProductionChanges, success?: string) => Promise<ProductionUpdateResult>; onRefresh: () => Promise<void>; onWhatsApp: () => void }) {
+function ProductionOrderDialog({ order, staff, advancedControl, initialFinalize = false, onClose, onUpdate, onRefresh, onWhatsApp }: { order: ProductionOrder; staff: ProductionStaff[]; advancedControl: boolean; initialFinalize?: boolean; onClose: () => void; onUpdate: (id: string, changes: ProductionChanges, success?: string) => Promise<ProductionUpdateResult>; onRefresh: () => Promise<void>; onWhatsApp: () => void }) {
   const [stage, setStage] = useState(order.stage);
   const [priority, setPriority] = useState(order.priority);
   const [dueAt, setDueAt] = useState(order.due_at?.slice(0, 10) ?? "");
@@ -301,7 +450,7 @@ function ProductionOrderDialog({ order, staff, advancedControl, onClose, onUpdat
   const [actualMessage, setActualMessage] = useState("");
   const [artworkUploading, setArtworkUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [finalizeOpen, setFinalizeOpen] = useState(false);
+  const [finalizeOpen, setFinalizeOpen] = useState(Boolean(initialFinalize) && order.stage !== "concluido");
   const [finalizing, setFinalizing] = useState(false);
   const [operationMessage, setOperationMessage] = useState("");
   const [allowNegativeStock, setAllowNegativeStock] = useState(false);

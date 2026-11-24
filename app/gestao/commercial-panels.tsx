@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Building2, Calculator, CalendarClock, Check, ChevronDown, CircleDollarSign, ClipboardList, Clock3, Copy, ExternalLink, Eye, FileText, MapPin, MessageCircle, Pencil, Plus, Save, Search, Share2, ShoppingCart, Sparkles, Trash2, UserRound, Users, X } from "lucide-react";
+import { AlertTriangle, Building2, Calculator, CalendarClock, Check, ChevronDown, CircleDollarSign, ClipboardList, Clock3, Columns3, Copy, ExternalLink, Eye, FileText, GripVertical, List, MapPin, MessageCircle, Pencil, Plus, Save, Search, Share2, ShoppingCart, Sparkles, Trash2, UserRound, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -16,6 +16,7 @@ import { whatsappUrl } from "@/lib/whatsapp";
 import { materialDisplayName } from "@/lib/material-label";
 import type { CutPlanQuotePrefill } from "@/lib/cut-plan-quote";
 import { Customer360Dialog } from "./customer-360-dialog";
+import { useToast } from "./toast-context";
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const date = (value?: string | null) => value ? new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR") : "—";
@@ -1024,12 +1025,26 @@ function QuoteDetails({ quote, onClose }: { quote: Quote; onClose: () => void })
   return <section className="quote-detail"><header><div><span className={`status-pill status-${quote.status}`}>{statusLabel[quote.status] ?? quote.status}</span><h2>Orçamento #{quote.number}</h2><p>{quote.company || quote.customerName} · {quote.service}</p></div><Button variant="ghost" size="icon" onClick={onClose}><X/></Button></header>{Boolean(quote.viewCount) && <div className="quote-view-banner"><Eye/><div><b>Proposta visualizada {quote.viewCount} {quote.viewCount === 1 ? "vez" : "vezes"} pelo cliente</b><small>Última abertura em {showApprovalDate(quote.lastViewedAt)}{quote.firstViewedAt && quote.firstViewedAt !== quote.lastViewedAt ? ` · primeira em ${showApprovalDate(quote.firstViewedAt)}` : ""}</small></div></div>}{quote.approvalVersions.length > 0 && <div className="approval-history"><Check/><div><b>{quote.approvalVersions.length} versão(ões) aprovada(s) preservada(s)</b><small>Cada aprovação permanece imutável, mesmo depois de uma nova revisão.</small><span>{quote.approvalVersions.map((version) => <Button key={version.id} size="sm" variant="outline" onClick={() => window.open(`/api/gestao/orcamentos/versao/${version.id}`, "_blank", "noopener,noreferrer")}><FileText/>Versão {version.version} · {showApprovalDate(version.approved_at)}</Button>)}</span></div></div>}<div className="quote-detail-metrics"><article><span>Total</span><b>{currency.format(total)}</b></article><article><span>Custo previsto</span><b>{currency.format(cost)}</b></article><article><span>Margem bruta</span><b>{margin.toFixed(1)}%</b></article><article><span>Validade</span><b>{date(quote.validUntil)}</b></article></div><QuoteShareActions quote={quote}/><div className="quote-detail-grid"><div><h3>Itens</h3>{quote.items.length ? <div className="detail-items">{quote.items.map((item, index) => <article key={item.id ?? index}><div><b>{item.description}</b><small>{item.material || item.service_type || "Sem material definido"}{item.width_mm && item.height_mm ? ` · ${item.width_mm} × ${item.height_mm} mm` : ""}</small></div><span>{item.quantity} {item.unit}</span><strong>{currency.format(Number(item.total ?? item.quantity * item.unit_price))}</strong></article>)}</div> : <p className="detail-empty">Solicitação recebida sem composição de itens.</p>}</div><aside><h3>Condições</h3><dl><div><dt>Origem</dt><dd>{sourceLabel[quote.source] ?? quote.source}</dd></div><div><dt>Prazo</dt><dd>{quote.deliveryDays ? `${quote.deliveryDays} dias` : "A definir"}</dd></div><div><dt>Instalação</dt><dd>{quote.installationIncluded ? "Inclusa" : "Não inclusa"}</dd></div><div><dt>Pagamento</dt><dd>{quote.paymentTerms || "A definir"}</dd></div><div><dt>Contato</dt><dd>{quote.phone}</dd></div></dl></aside></div>{quote.details && <div className="quote-notes"><b>Escopo / observações</b><p>{quote.details}</p></div>}</section>;
 }
 
+const quoteKanbanColumns = [
+  { key: "novo", label: "Novos" },
+  { key: "em_analise", label: "Em análise" },
+  { key: "aguardando_cliente", label: "Aguardando cliente" },
+  { key: "aprovado", label: "Aprovados" },
+  { key: "convertido", label: "Fechados" },
+] as const;
+const quotesViewStorageKey = "nexofab-quotes-view";
+
 export function QuotesPanel({ search, composerRequest = 0, requestedQuoteId, quoteOpenRequest = 0, prefill, onManageCalculationTypes }: { search: string; composerRequest?: number; requestedQuoteId?: string; quoteOpenRequest?: number; prefill?: CutPlanQuotePrefill; onManageCalculationTypes: () => void }) {
+  const { notify } = useToast();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [tenderItems, setTenderItems] = useState<TenderItem[]>([]);
   const [catalog, setCatalog] = useState<PricingCatalog>({ products: [], materials: [], machines: [], fixedCosts: [], fixedCostsMonthly: 0, costCenters: [], suppliers: [], settings: null, configured: false });
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
+  const [dragQuoteId, setDragQuoteId] = useState<string | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+  const [movingQuoteId, setMovingQuoteId] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(composerRequest > 0);
   const [quickSaleOpen, setQuickSaleOpen] = useState(false);
   const [editing, setEditing] = useState<Quote | null>(null);
@@ -1045,6 +1060,17 @@ export function QuotesPanel({ search, composerRequest = 0, requestedQuoteId, quo
   const [hasMoreQuotes, setHasMoreQuotes] = useState(false);
   const [loadingMoreQuotes, setLoadingMoreQuotes] = useState(false);
   const [message, setMessage] = useState("");
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      const saved = window.localStorage.getItem(quotesViewStorageKey);
+      if (saved === "table" || saved === "kanban") setViewMode(saved);
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, []);
+  const switchView = (mode: "kanban" | "table") => {
+    setViewMode(mode);
+    try { window.localStorage.setItem(quotesViewStorageKey, mode); } catch { /* ignore */ }
+  };
   const load = useCallback(async () => {
     const [quoteResult, customerResult, pricingResult, tenderResult] = await Promise.all([api<{ quotes: Quote[]; pagination?: { hasMore: boolean } }>("/api/orcamentos?limit=100&offset=0"), api<{ customers: Customer[] }>("/api/gestao/clientes"), api<PricingCatalog>("/api/gestao/precificacao"), api<{ items: TenderItem[] }>("/api/gestao/licitacoes").catch(() => ({ items: [] }))]);
     setQuotes(quoteResult.quotes); setHasMoreQuotes(Boolean(quoteResult.pagination?.hasMore)); setCustomers(customerResult.customers); setCatalog(pricingResult); setTenderItems(tenderResult.items); setLoading(false);
@@ -1138,10 +1164,46 @@ export function QuotesPanel({ search, composerRequest = 0, requestedQuoteId, quo
   async function changeStatus(id: string, status: string) {
     try { await api("/api/orcamentos", { method: "PATCH", body: JSON.stringify({ id, status }) }); await load(); setMessage("OK:Status atualizado."); } catch (error) { setMessage((error as Error).message); }
   }
+  async function moveQuoteColumn(quoteId: string, targetStatus: string) {
+    const quote = quotes.find((item) => item.id === quoteId);
+    setDragQuoteId(null);
+    setDragOverCol(null);
+    if (!quote || quote.status === targetStatus) return;
+    if (quote.status === "convertido") {
+      notify("Orçamentos já fechados não podem voltar no funil.", "info");
+      return;
+    }
+    if (targetStatus === "convertido") {
+      setClosing(quote);
+      notify(`Confirme o recebimento e gere a OS para fechar o orçamento #${quote.number}.`, "info");
+      return;
+    }
+    const previous = quotes;
+    setMovingQuoteId(quote.id);
+    setQuotes((current) => current.map((item) => item.id === quote.id ? { ...item, status: targetStatus } : item));
+    try {
+      await api("/api/orcamentos", { method: "PATCH", body: JSON.stringify({ id: quote.id, status: targetStatus }) });
+      await load();
+      notify(`Orçamento #${quote.number} movido para ${statusLabel[targetStatus] ?? targetStatus}.`, "success");
+    } catch (error) {
+      setQuotes(previous);
+      const errMsg = (error as Error).message;
+      setMessage(errMsg);
+      notify(errMsg, "error");
+    } finally {
+      setMovingQuoteId(null);
+    }
+  }
+  const kanbanQuotes = useMemo(() => quotes.filter((quote) => {
+    if (["recusado", "expirado"].includes(quote.status)) return false;
+    const haystack = normalizeSearch(`${quote.number} ${quote.customerName} ${quote.company ?? ""} ${quote.phone ?? ""} ${quote.email ?? ""} ${quote.service} ${quote.material ?? ""} ${quote.details ?? ""} ${quote.status} ${quote.source} ${quote.items.map((item) => `${item.description} ${item.material ?? ""} ${item.service_type ?? ""}`).join(" ")}`);
+    return [search, quoteSearch].map(normalizeSearch).filter(Boolean).every((term) => haystack.includes(term));
+  }), [quotes, search, quoteSearch]);
+  const todayIso = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
   const pipeline = { open: quotes.filter((quote) => !["convertido", "recusado", "expirado"].includes(quote.status)).length, approved: quotes.filter((quote) => quote.status === "aprovado").length, closed: quotes.filter((quote) => quote.status === "convertido").length, value: quotes.filter((quote) => !["recusado", "expirado"].includes(quote.status)).reduce((sum, quote) => sum + Number(quote.estimatedValue ?? 0), 0) };
 
   return <>
-    <SectionHeading eyebrow="PROPOSTAS E PRECIFICAÇÃO" title="Orçamentos" description="Controle do funil, composição de custos, margem, validade e conversão em ordem de serviço." action={<div className="quote-heading-actions"><Button variant="outline" onClick={() => setQuickSaleOpen(true)}><ShoppingCart/>Venda rápida</Button><Button onClick={() => { setQuoteDirty(false); setNewOpen(true); }}><Plus/>Novo orçamento</Button></div>}/>
+    <SectionHeading eyebrow="PROPOSTAS E PRECIFICAÇÃO" title="Orçamentos" description="Arraste propostas pelo funil comercial, acompanhe custos, margem, validade e converta em ordem de serviço." action={<div className="quote-heading-actions"><Button variant="outline" onClick={() => setQuickSaleOpen(true)}><ShoppingCart/>Venda rápida</Button><Button onClick={() => { setQuoteDirty(false); setNewOpen(true); }}><Plus/>Novo orçamento</Button></div>}/>
     <section className="commercial-kpis" aria-label="Filtros rápidos do funil"><button type="button" className={filter === "abertos" ? "active" : ""} onClick={() => setFilter("abertos")}><span>EM ABERTO</span><b>{pipeline.open}</b><small>propostas no funil</small></button><button type="button" className={filter === "aprovado" ? "active" : ""} onClick={() => setFilter("aprovado")}><span>APROVADOS</span><b>{pipeline.approved}</b><small>aguardando fechamento</small></button><button type="button" className={filter === "convertido" ? "active" : ""} onClick={() => setFilter("convertido")}><span>CONVERTIDOS</span><b>{pipeline.closed}</b><small>ordens geradas</small></button><button type="button" className={filter === "carteira" ? "active" : ""} onClick={() => setFilter("carteira")}><span>CARTEIRA</span><b>{currency.format(pipeline.value)}</b><small>valor potencial</small></button></section>
     {!loading && <section className="quote-followup-center"><header><div><small>PRÓXIMAS AÇÕES</small><h2>Central de acompanhamento</h2><p>Prioridades comerciais reunidas sem esconder sua lista de orçamentos.</p></div><span className={reminderCount ? "has-reminders" : ""}>{reminderCount} ação(ões)</span></header>{reminderCount ? <><div className="quote-reminder-tabs">{reminderGroups.map(({ key, label, description, count, icon: Icon }) => <button key={key} type="button" className={currentReminderView === key ? "active" : ""} onClick={() => setReminderView(key)}><Icon/><span><b>{label}</b><small>{description}</small></span><strong>{count}</strong></button>)}</div><div className="quote-reminder-grid">{currentReminders.slice(0, 5).map((quote) => <article className={currentReminderView} key={`${currentReminderView}-${quote.id}`}><span>{currentReminderView === "approved" ? <Check/> : currentReminderView === "overduePayments" ? <CircleDollarSign/> : currentReminderView === "expiring" ? <CalendarClock/> : <Clock3/>}</span><div><small>{currentReminderView === "followUps" ? "RETORNO COMERCIAL" : currentReminderView === "expiring" ? "VALIDADE PRÓXIMA" : currentReminderView === "approved" ? "APROVADO — PRÓXIMO PASSO" : "PAGAMENTO VENCIDO"}</small><b>#{quote.number} · {quote.company || quote.customerName}</b><p>{currentReminderView === "followUps" ? `${quote.service} · aguardando resposta há pelo menos 2 dias` : currentReminderView === "expiring" ? `Vence em ${date(quote.validUntil)} · ${currency.format(Number(quote.estimatedValue ?? 0))}` : currentReminderView === "approved" ? "Confirme a entrada e gere a ordem de produção." : `${currency.format(Number(quote.overdueBalance))} em atraso · vencimento ${date(quote.nextPaymentDue)}`}</p></div><div><Button size="sm" variant="outline" onClick={() => setDetails(quote)}>Abrir proposta</Button>{currentReminderView === "approved" ? <Button size="sm" onClick={() => setClosing(quote)}>Fechar pedido</Button> : (currentReminderView === "followUps" || currentReminderView === "overduePayments") ? <Button size="sm" onClick={() => openFollowUp(quote)}><MessageCircle/>{currentReminderView === "followUps" ? "Pedir retorno" : "Cobrar"}</Button> : null}</div></article>)}{currentReminders.length > 5 && <p className="quote-reminder-more">Mais {currentReminders.length - 5} ação(ões) nesta categoria. Use os filtros do funil para consultar todas.</p>}</div></> : <div className="quote-reminders-clear"><Check/><span><b>Nenhuma ação pendente agora</b><small>Retornos, aprovações, prazos e pagamentos estão em dia.</small></span></div>}</section>}
     <Feedback message={message}/>
@@ -1151,8 +1213,89 @@ export function QuotesPanel({ search, composerRequest = 0, requestedQuoteId, quo
     {closing ? <div className="workspace-modal" role="dialog" aria-modal="true" aria-label={`Fechar orçamento ${closing.number}`} onMouseDown={(event) => { if (event.target === event.currentTarget) setClosing(null); }}><div className="workspace-dialog compact"><CloseQuoteForm quote={closing} customer={customers.find((customer) => customer.id === closing.customerId)} onClose={() => setClosing(null)} onSaved={() => { setClosing(null); load(); setMessage("OK:Orçamento fechado, recebimento registrado e ordem de produção criada."); }}/></div></div> : null}
     {revalidating ? <div className="workspace-modal" role="dialog" aria-modal="true" aria-label={`Revalidar orçamento ${revalidating.number}`} onMouseDown={(event) => { if (event.target === event.currentTarget) setRevalidating(null); }}><div className="workspace-dialog compact"><RevalidateQuoteForm quote={revalidating} onClose={() => setRevalidating(null)} onSaved={() => { setRevalidating(null); load(); setMessage("OK:Orçamento revalidado. O mesmo link público já está disponível ao cliente."); }}/></div></div> : null}
     {details ? <div className="workspace-modal" role="dialog" aria-modal="true" aria-label={`Detalhes do orçamento ${details.number}`} onMouseDown={(event) => { if (event.target === event.currentTarget) setDetails(null); }}><div className="workspace-dialog"><QuoteDetails quote={details} onClose={() => setDetails(null)}/></div></div> : null}
-    <div className="table-toolbar quote-table-toolbar"><div><label>Status<select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="abertos">Em aberto</option><option value="carteira">Carteira ativa</option><option value="todos">Todos</option><option value="novo">Novos</option><option value="em_analise">Em análise</option><option value="aguardando_cliente">Aguardando cliente</option><option value="aprovado">Aprovados</option><option value="convertido">Fechados</option><option value="recusado">Recusados</option><option value="expirado">Expirados</option></select></label><label className="quote-search-field"><Search/><Input type="search" value={quoteSearch} onChange={(event) => setQuoteSearch(event.target.value)} placeholder="Pesquisar nº, cliente, telefone, projeto ou item" aria-label="Pesquisar orçamentos"/>{quoteSearch && <button type="button" aria-label="Limpar pesquisa de orçamentos" onClick={() => setQuoteSearch("")}><X/></button>}</label></div><span>{filtered.length} resultado(s)</span></div>
-    {!loading && !filtered.length ? <EmptyState icon={ClipboardList} title="Nenhum orçamento neste filtro" text="Crie uma proposta detalhada ou altere o filtro para consultar o histórico comercial."/> : <div className="module-table quote-table"><Table><TableHeader><TableRow><TableHead>Nº / origem</TableHead><TableHead>Cliente / projeto</TableHead><TableHead>Validade</TableHead><TableHead>Status</TableHead><TableHead>Margem</TableHead><TableHead>Valor</TableHead><TableHead></TableHead></TableRow></TableHeader><TableBody>{filtered.map((quote) => { const cost = quote.items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_cost), 0); const total = Number(quote.estimatedValue ?? 0); const margin = total ? ((total - cost) / total) * 100 : 0; const expired = quote.status === "expirado" || Boolean(quote.validUntil && quote.validUntil < new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date())); return <TableRow key={quote.id}><TableCell><b>#{quote.number}</b><small>{sourceLabel[quote.source] ?? quote.source} · {date(quote.createdAt)}</small>{Boolean(quote.viewCount) && <span className="quote-viewed-pill" title={`Última visualização em ${showApprovalDate(quote.lastViewedAt)}`}><Eye/>Vista {quote.viewCount}x</span>}</TableCell><TableCell><b>{quote.company || quote.customerName}</b><small>{quote.service}</small></TableCell><TableCell><span className={expired ? "quote-expired-date" : ""}>{date(quote.validUntil)}{expired && <small>Vencido</small>}</span></TableCell><TableCell><select value={quote.status} disabled={quote.status === "convertido"} onChange={(event) => changeStatus(quote.id, event.target.value)}><option value="novo">Novo</option><option value="em_analise">Em análise</option><option value="aguardando_cliente">Aguardando cliente</option><option value="aprovado">Aprovado</option><option value="recusado">Recusado</option><option value="expirado">Expirado</option><option value="convertido">Fechado</option></select></TableCell><TableCell><span className={margin && margin < 25 ? "margin-badge warning" : "margin-badge"}>{total ? `${margin.toFixed(1)}%` : "—"}</span></TableCell><TableCell><b>{quote.estimatedValue !== null ? currency.format(total) : "A calcular"}</b><small>{quote.items.length} item(ns)</small></TableCell><TableCell><div className="row-actions"><Button size="sm" variant="outline" onClick={() => setDetails(quote)}>Detalhes<ChevronDown/></Button><Button size="sm" variant="outline" onClick={() => { setDuplicating(quote); setEditing(null); setNewOpen(false); setDetails(null); }}><Copy/>Duplicar</Button>{expired && !["convertido", "aprovado"].includes(quote.status) && <Button size="sm" variant="outline" onClick={() => { setRevalidating(quote); setEditing(null); setDuplicating(null); setDetails(null); }}><CalendarClock/>Revalidar</Button>}{quote.status !== "convertido" && <Button size="sm" variant="outline" onClick={() => { setEditing(quote); setDuplicating(null); setRevalidating(null); setNewOpen(false); setDetails(null); }}><Pencil/>Editar</Button>}{quote.status !== "convertido" && <Button size="sm" onClick={() => setClosing(quote)}>Fechar</Button>}</div></TableCell></TableRow>; })}</TableBody></Table></div>}
+    <div className="table-toolbar quote-table-toolbar"><div><label>Status<select value={filter} onChange={(event) => { const next = event.target.value; setFilter(next); if (["recusado", "expirado"].includes(next)) switchView("table"); }}><option value="abertos">Em aberto</option><option value="carteira">Carteira ativa</option><option value="todos">Todos</option><option value="novo">Novos</option><option value="em_analise">Em análise</option><option value="aguardando_cliente">Aguardando cliente</option><option value="aprovado">Aprovados</option><option value="convertido">Fechados</option><option value="recusado">Recusados</option><option value="expirado">Expirados</option></select></label><label className="quote-search-field"><Search/><Input type="search" value={quoteSearch} onChange={(event) => setQuoteSearch(event.target.value)} placeholder="Pesquisar nº, cliente, telefone, projeto ou item" aria-label="Pesquisar orçamentos"/>{quoteSearch && <button type="button" aria-label="Limpar pesquisa de orçamentos" onClick={() => setQuoteSearch("")}><X/></button>}</label><div className="view-mode-toggle" role="group" aria-label="Modo de visualização dos orçamentos"><button type="button" className={viewMode === "kanban" ? "active" : ""} onClick={() => switchView("kanban")}><Columns3/>Funil Kanban</button><button type="button" className={viewMode === "table" ? "active" : ""} onClick={() => switchView("table")}><List/>Tabela</button></div></div><span>{viewMode === "kanban" ? kanbanQuotes.length : filtered.length} resultado(s)</span></div>
+    {!loading && !(viewMode === "kanban" ? kanbanQuotes.length : filtered.length) ? <EmptyState icon={ClipboardList} title="Nenhum orçamento neste filtro" text="Crie uma proposta detalhada ou altere o filtro para consultar o histórico comercial."/> : viewMode === "kanban" ? (
+      <div className="pcp-kanban-board quote-kanban-board" role="region" aria-label="Funil Kanban de Orçamentos">
+        {quoteKanbanColumns.map((col) => {
+          const columnQuotes = kanbanQuotes.filter((quote) => quote.status === col.key);
+          const displayQuotes = col.key === "convertido" ? columnQuotes.slice(0, 15) : columnQuotes;
+          const columnTotal = columnQuotes.reduce((sum, quote) => sum + Number(quote.estimatedValue ?? 0), 0);
+          const isOver = dragOverCol === col.key;
+          return (
+            <section
+              key={col.key}
+              className={`pcp-kanban-col quote-col-${col.key} ${isOver ? "drag-over" : ""}`}
+              onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; if (dragOverCol !== col.key) setDragOverCol(col.key); }}
+              onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragOverCol((cur) => cur === col.key ? null : cur); }}
+              onDrop={(event) => { event.preventDefault(); const droppedId = event.dataTransfer.getData("text/plain") || dragQuoteId; if (droppedId) void moveQuoteColumn(droppedId, col.key); }}
+            >
+              <header>
+                <div>
+                  <b>{col.label}</b>
+                  <span>{columnQuotes.length}</span>
+                </div>
+                <small>{columnTotal > 0 ? currency.format(columnTotal) : "R$ 0,00"}</small>
+              </header>
+              <div className="pcp-kanban-cards">
+                {displayQuotes.length === 0 ? (
+                  <p className="pcp-kanban-empty">{col.key === "convertido" ? "Arraste aqui para fechar pedido" : "Arraste um orçamento para cá"}</p>
+                ) : displayQuotes.map((quote) => {
+                  const cost = quote.items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_cost), 0);
+                  const total = Number(quote.estimatedValue ?? 0);
+                  const margin = total ? ((total - cost) / total) * 100 : 0;
+                  const expired = quote.status !== "convertido" && Boolean(quote.validUntil && quote.validUntil < todayIso);
+                  const isClosed = quote.status === "convertido";
+                  return (
+                    <article
+                      key={quote.id}
+                      draggable={!isClosed && movingQuoteId !== quote.id}
+                      onDragStart={(event) => {
+                        setDragQuoteId(quote.id);
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/plain", quote.id);
+                      }}
+                      onDragEnd={() => { setDragQuoteId(null); setDragOverCol(null); }}
+                      className={`pcp-kanban-card ${expired ? "overdue" : ""} ${dragQuoteId === quote.id ? "dragging" : ""} ${movingQuoteId === quote.id ? "moving" : ""}`}
+                    >
+                      <div className="pcp-card-top">
+                        <span className="pcp-card-grip" title={isClosed ? "Pedido fechado" : "Arraste para mudar de etapa"}>
+                          {!isClosed && <GripVertical />}
+                          <b>#{quote.number}</b>
+                          <small>{sourceLabel[quote.source] ?? quote.source}</small>
+                        </span>
+                        {total > 0 && <span className={margin < 25 ? "margin-badge warning" : "margin-badge"}>{margin.toFixed(0)}%</span>}
+                      </div>
+                      <button type="button" className="pcp-card-body" onClick={() => setDetails(quote)}>
+                        <h3>{quote.company || quote.customerName}</h3>
+                        <p>{quote.service}</p>
+                      </button>
+                      {(Boolean(quote.viewCount) || expired) && (
+                        <div className="pcp-card-tags">
+                          {Boolean(quote.viewCount) && <span className="pcp-tag ok" title={`Última abertura em ${showApprovalDate(quote.lastViewedAt)}`}><Eye/>Vista {quote.viewCount}x</span>}
+                          {expired && <span className="pcp-tag danger"><CalendarClock/>Validade vencida</span>}
+                        </div>
+                      )}
+                      <div className="pcp-card-meta">
+                        <span className={`pcp-due-pill ${expired ? "overdue" : ""}`}>
+                          <CalendarClock/>
+                          {quote.validUntil ? `Val. ${date(quote.validUntil)}` : date(quote.createdAt)}
+                        </span>
+                        <strong>{quote.estimatedValue !== null ? currency.format(total) : "A calcular"}</strong>
+                      </div>
+                      <footer>
+                        <button type="button" onClick={() => openFollowUp(quote)} title="Chamar no WhatsApp"><MessageCircle/>WhatsApp</button>
+                        <button type="button" onClick={() => setDetails(quote)}>Detalhes</button>
+                        {!isClosed && <button type="button" className="primary" onClick={() => setClosing(quote)}>Fechar</button>}
+                      </footer>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    ) : <div className="module-table quote-table"><Table><TableHeader><TableRow><TableHead>Nº / origem</TableHead><TableHead>Cliente / projeto</TableHead><TableHead>Validade</TableHead><TableHead>Status</TableHead><TableHead>Margem</TableHead><TableHead>Valor</TableHead><TableHead></TableHead></TableRow></TableHeader><TableBody>{filtered.map((quote) => { const cost = quote.items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_cost), 0); const total = Number(quote.estimatedValue ?? 0); const margin = total ? ((total - cost) / total) * 100 : 0; const expired = quote.status === "expirado" || Boolean(quote.validUntil && quote.validUntil < todayIso); return <TableRow key={quote.id}><TableCell><b>#{quote.number}</b><small>{sourceLabel[quote.source] ?? quote.source} · {date(quote.createdAt)}</small>{Boolean(quote.viewCount) && <span className="quote-viewed-pill" title={`Última visualização em ${showApprovalDate(quote.lastViewedAt)}`}><Eye/>Vista {quote.viewCount}x</span>}</TableCell><TableCell><b>{quote.company || quote.customerName}</b><small>{quote.service}</small></TableCell><TableCell><span className={expired ? "quote-expired-date" : ""}>{date(quote.validUntil)}{expired && <small>Vencido</small>}</span></TableCell><TableCell><select value={quote.status} disabled={quote.status === "convertido"} onChange={(event) => changeStatus(quote.id, event.target.value)}><option value="novo">Novo</option><option value="em_analise">Em análise</option><option value="aguardando_cliente">Aguardando cliente</option><option value="aprovado">Aprovado</option><option value="recusado">Recusado</option><option value="expirado">Expirado</option><option value="convertido">Fechado</option></select></TableCell><TableCell><span className={margin && margin < 25 ? "margin-badge warning" : "margin-badge"}>{total ? `${margin.toFixed(1)}%` : "—"}</span></TableCell><TableCell><b>{quote.estimatedValue !== null ? currency.format(total) : "A calcular"}</b><small>{quote.items.length} item(ns)</small></TableCell><TableCell><div className="row-actions"><Button size="sm" variant="outline" onClick={() => setDetails(quote)}>Detalhes<ChevronDown/></Button><Button size="sm" variant="outline" onClick={() => { setDuplicating(quote); setEditing(null); setNewOpen(false); setDetails(null); }}><Copy/>Duplicar</Button>{expired && !["convertido", "aprovado"].includes(quote.status) && <Button size="sm" variant="outline" onClick={() => { setRevalidating(quote); setEditing(null); setDuplicating(null); setDetails(null); }}><CalendarClock/>Revalidar</Button>}{quote.status !== "convertido" && <Button size="sm" variant="outline" onClick={() => { setEditing(quote); setDuplicating(null); setRevalidating(null); setNewOpen(false); setDetails(null); }}><Pencil/>Editar</Button>}{quote.status !== "convertido" && <Button size="sm" onClick={() => setClosing(quote)}>Fechar</Button>}</div></TableCell></TableRow>; })}</TableBody></Table></div>}
     {hasMoreQuotes && <div className="list-load-more"><span>Exibindo {quotes.length} orçamento(s) carregado(s). Há mais registros antigos disponíveis.</span><Button type="button" variant="outline" onClick={() => void loadMoreQuotes()} disabled={loadingMoreQuotes}>{loadingMoreQuotes ? "Carregando..." : "Carregar mais orçamentos"}</Button></div>}
   </>;
 }
