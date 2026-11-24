@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { BarChart3, Boxes, Building2, Calculator, CircleDollarSign, ClipboardList, CreditCard, Factory, Gavel, Home, LoaderCircle, LogOut, MessageSquareMore, Plus, Scissors, Search, UserCog, Users } from "lucide-react";
+import { BarChart3, Boxes, Building2, Calculator, CircleDollarSign, ClipboardList, CreditCard, Factory, Gavel, Home, LogOut, MessageSquareMore, Plus, Scissors, Search, UserCog, Users } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,9 +15,27 @@ import type { SubscriptionAccessSummary } from "@/lib/billing";
 
 function PanelLoading() {
   return (
-    <div className="panel-loading-state">
-      <LoaderCircle className="spin" />
-      <span>Carregando módulo...</span>
+    <div className="panel-skeleton" aria-busy="true" aria-label="Carregando módulo">
+      <div className="panel-skeleton-head">
+        <div className="panel-skeleton-stack">
+          <span className="sk-line sk-xs" />
+          <span className="sk-line sk-lg" />
+          <span className="sk-line sk-md" />
+        </div>
+        <span className="sk-btn" />
+      </div>
+      <div className="panel-skeleton-kpis">
+        <span className="sk-card" />
+        <span className="sk-card" />
+        <span className="sk-card" />
+        <span className="sk-card" />
+      </div>
+      <div className="panel-skeleton-table">
+        <span className="sk-row" />
+        <span className="sk-row" />
+        <span className="sk-row" />
+        <span className="sk-row" />
+      </div>
     </div>
   );
 }
@@ -36,25 +54,45 @@ const TeamPanel = dynamic(() => import("./team-panel").then((mod) => mod.TeamPan
 const BillingPanel = dynamic(() => import("./billing-panel").then((mod) => mod.BillingPanel), { loading: PanelLoading });
 const CompanySettingsPanel = dynamic(() => import("./company-settings-panel").then((mod) => mod.CompanySettingsPanel), { loading: PanelLoading });
 
-const menu = [
-  ["visao-geral", Home, "Visão geral"],
-  ["atendimentos", MessageSquareMore, "Atendimentos"],
-  ["orcamentos", ClipboardList, "Orçamentos"],
-  ["precificacao", Calculator, "Precificação"],
-  ["licitacoes", Gavel, "Licitações"],
-  ["producao", Factory, "Produção"],
-  ["planos-corte", Scissors, "Planos de corte"],
-  ["estoque", Boxes, "Estoque"],
-  ["clientes", Users, "Clientes"],
-  ["financeiro", CircleDollarSign, "Financeiro"],
-  ["relatorios", BarChart3, "Relatórios"],
-  ["equipe", UserCog, "Equipe"],
-  ["assinatura", CreditCard, "Assinatura"],
-  ["empresa", Building2, "Minha empresa"],
+const menuGroups = [
+  {
+    label: "COMERCIAL",
+    items: [
+      ["visao-geral", Home, "Visão geral"],
+      ["atendimentos", MessageSquareMore, "Atendimentos"],
+      ["orcamentos", ClipboardList, "Orçamentos"],
+      ["precificacao", Calculator, "Precificação"],
+      ["licitacoes", Gavel, "Licitações"],
+      ["clientes", Users, "Clientes"],
+    ],
+  },
+  {
+    label: "OPERAÇÃO",
+    items: [
+      ["producao", Factory, "Produção"],
+      ["planos-corte", Scissors, "Planos de corte"],
+      ["estoque", Boxes, "Estoque"],
+    ],
+  },
+  {
+    label: "FINANCEIRO",
+    items: [
+      ["financeiro", CircleDollarSign, "Financeiro"],
+      ["relatorios", BarChart3, "Relatórios"],
+    ],
+  },
+  {
+    label: "EMPRESA",
+    items: [
+      ["equipe", UserCog, "Equipe"],
+      ["assinatura", CreditCard, "Assinatura"],
+      ["empresa", Building2, "Minha empresa"],
+    ],
+  },
 ] as const;
 
-type MenuKey = (typeof menu)[number][0];
-const validMenuKeys = new Set<string>(menu.map(([key]) => key));
+type MenuKey = (typeof menuGroups)[number]["items"][number][0];
+const validMenuKeys = new Set<string>(menuGroups.flatMap((group) => group.items.map(([key]) => key)));
 
 type OrganizationOption = { id: string; trade_name: string };
 
@@ -122,11 +160,51 @@ export function ManagementDashboard({ userName, initialSection = "visao-geral", 
   }
 
   return <ToastProvider><SidebarProvider><Sidebar className="management-sidebar" collapsible="icon">
-    <SidebarHeader><Link href="/" className="dash-brand nexofab-wordmark" aria-label="NexoFab"><span>Nexo</span>Fab</Link></SidebarHeader>
-    <SidebarContent><SidebarGroup><SidebarGroupLabel>GESTÃO</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{menu.filter(([key]) => isSectionAllowed(key, activeRole)).map(([key, Icon, label]) => <SidebarMenuItem key={label}><SidebarMenuButton isActive={section === key} tooltip={label} onClick={() => { setQuoteComposer(0); if (key === "financeiro") setFinanceSection(["owner", "admin", "financeiro"].includes(activeRole) ? "payables" : "commissions"); selectSection(key as MenuKey); }}><Icon/><span>{key === "financeiro" && activeRole === "comercial" ? "Comissões" : label}</span></SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent>
-    <SidebarFooter><SidebarMenu><SidebarMenuItem><form action="/auth/signout" method="post"><SidebarMenuButton type="submit"><LogOut/><span>Sair</span></SidebarMenuButton></form></SidebarMenuItem></SidebarMenu></SidebarFooter>
+    <SidebarHeader>
+      <Link href="/" className="dash-brand" aria-label="NexoFab">
+        <span className="dash-brand-mark" aria-hidden="true">N</span>
+        <span className="dash-brand-copy">
+          <strong className="nexofab-wordmark"><span>Nexo</span>Fab</strong>
+          <small>GESTÃO INDUSTRIAL</small>
+        </span>
+      </Link>
+    </SidebarHeader>
+    <SidebarContent>
+      {menuGroups.map((group) => {
+        const visibleItems = group.items.filter(([key]) => isSectionAllowed(key, activeRole));
+        if (!visibleItems.length) return null;
+        return (
+          <SidebarGroup key={group.label}>
+            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleItems.map(([key, Icon, label]) => (
+                  <SidebarMenuItem key={key}>
+                    <SidebarMenuButton
+                      isActive={section === key}
+                      tooltip={label}
+                      onClick={() => {
+                        setQuoteComposer(0);
+                        if (key === "financeiro") {
+                          setFinanceSection(["owner", "admin", "financeiro"].includes(activeRole) ? "payables" : "commissions");
+                        }
+                        selectSection(key as MenuKey);
+                      }}
+                    >
+                      <Icon />
+                      <span>{key === "financeiro" && activeRole === "comercial" ? "Comissões" : label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        );
+      })}
+    </SidebarContent>
+    <SidebarFooter><SidebarMenu><SidebarMenuItem><form action="/auth/signout" method="post"><SidebarMenuButton type="submit"><LogOut/><span>Sair da conta</span></SidebarMenuButton></form></SidebarMenuItem></SidebarMenu></SidebarFooter>
   </Sidebar><SidebarInset className="dash-shell">
-    <header className="dash-header"><SidebarTrigger/><label className="organization-switcher"><Building2/><select aria-label="Empresa ativa" value={activeOrganizationId} disabled={switchingOrganization} onChange={(event) => void switchOrganization(event.target.value)}>{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.trade_name}</option>)}</select></label><div className="dash-search"><Search/><Input aria-label="Buscar nesta área" placeholder="Buscar nesta área..." value={search} onChange={(event) => setSearch(event.target.value)}/></div>{canCreateQuote && <Button className="dash-new-quote" onClick={() => { setQuoteOpenRequest(null); setQuotePrefill(null); selectSection("orcamentos"); setQuoteComposer((value) => value + 1); }}><Plus/>Novo orçamento</Button>}<NotificationCenter onOpenQuotes={(quoteId) => { setQuoteComposer(0); setQuotePrefill(null); if (quoteId) setQuoteOpenRequest({ id: quoteId, request: Date.now() }); selectSection("orcamentos"); }} onOpenProduction={() => { setQuoteComposer(0); selectSection("producao"); }} onOpenAttendance={() => { setQuoteComposer(0); selectSection("atendimentos"); }}/><div className="user-chip"><span>{userName.slice(0, 1).toUpperCase()}</span><div><b>{userName.split("@")[0]}</b><small>{activeRole === "owner" ? "Proprietário" : activeRole}</small></div></div></header>
+    <header className="dash-header"><SidebarTrigger/><label className="organization-switcher"><Building2/><select aria-label="Empresa ativa" value={activeOrganizationId} disabled={switchingOrganization} onChange={(event) => void switchOrganization(event.target.value)}>{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.trade_name}</option>)}</select></label><div className="dash-search"><Search/><Input aria-label="Buscar nesta área" placeholder="Buscar clientes, orçamentos, ordens..." value={search} onChange={(event) => setSearch(event.target.value)}/></div>{canCreateQuote && <Button className="dash-new-quote" onClick={() => { setQuoteOpenRequest(null); setQuotePrefill(null); selectSection("orcamentos"); setQuoteComposer((value) => value + 1); }}><Plus/><span>Novo orçamento</span></Button>}<NotificationCenter onOpenQuotes={(quoteId) => { setQuoteComposer(0); setQuotePrefill(null); if (quoteId) setQuoteOpenRequest({ id: quoteId, request: Date.now() }); selectSection("orcamentos"); }} onOpenProduction={() => { setQuoteComposer(0); selectSection("producao"); }} onOpenAttendance={() => { setQuoteComposer(0); selectSection("atendimentos"); }}/><div className="user-chip"><span>{userName.slice(0, 1).toUpperCase()}</span><div><b>{userName.split("@")[0]}</b><small>{activeRole === "owner" ? "Proprietário" : activeRole}</small></div></div></header>
     <main className="dash-main">
       {section !== "assinatura" && (subscriptionSummary.status === "trialing" || subscriptionSummary.isReadOnly) && (
         <div className={`billing-banner ${subscriptionSummary.tone}`}>
