@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(44);
+select plan(49);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password,
@@ -465,6 +465,94 @@ select results_eq(
   $$select public.is_platform_admin() and ((public.get_founder_dashboard() -> 'kpis' ->> 'totalOrganizations')::integer >= 3)$$,
   $$values (true)$$,
   'Fundador listado em private.platform_admins acessa get_founder_dashboard()'
+);
+reset role;
+
+-- 45 a 49: Central de Atendimentos, Webhook Meta WhatsApp e trava rígida de 24h
+select set_config('request.jwt.claims', '{"sub":"10000000-0000-0000-0000-000000000001","role":"authenticated","email":"owner-a@nexofab.test"}', true);
+set local role authenticated;
+select results_eq(
+  $$
+    with saved as (
+      select public.save_organization_whatsapp_config(
+        true,
+        'reply_24h_locked',
+        '109988776655',
+        '(11) 98888-7777',
+        30,
+        'meta_secret_access_token_test',
+        'meta_app_secret_test',
+        false,
+        false
+      ) as cfg
+    )
+    select
+      (cfg ->> 'enabled')::boolean
+      and (cfg ->> 'hasAccessToken')::boolean
+      and (cfg ->> 'hasAppSecret')::boolean
+      and not (cfg ? 'accessToken')
+      and not (cfg ? 'appSecret')
+      and public.verify_meta_whatsapp_webhook('a0000000-0000-0000-0000-000000000001', cfg ->> 'verifyToken')
+      and not public.verify_meta_whatsapp_webhook('a0000000-0000-0000-0000-000000000001', 'token-invalido')
+    from saved
+  $$,
+  $$values (true)$$,
+  'Configuração WhatsApp Meta gera verifyToken, valida webhook e nunca expõe segredos no retorno'
+);
+reset role;
+
+select set_config('request.jwt.claims', '{}', true);
+set local role anon;
+select throws_ok(
+  $$select public.process_meta_whatsapp_webhook(
+    'a0000000-0000-0000-0000-000000000001',
+    '109988776655',
+    'sha256=assinatura-invalida',
+    '{"entry":[]}',
+    '[{"phone":"5511977776666","contactName":"Cliente Meta","direction":"inbound","body":"Oi, preciso de orçamento","providerMessageId":"wamid.1"}]'::jsonb
+  )$$,
+  'P0001',
+  'Assinatura do webhook Meta inválida',
+  'Webhook Meta rejeita assinatura HMAC inválida quando app_secret está configurado'
+);
+
+select results_eq(
+  $$select (public.process_meta_whatsapp_webhook(
+    'a0000000-0000-0000-0000-000000000001',
+    '109988776655',
+    'sha256=' || encode(extensions.hmac(convert_to('{"entry":[]}', 'utf8'), convert_to('meta_app_secret_test', 'utf8'), 'sha256'), 'hex'),
+    '{"entry":[]}',
+    '[{"phone":"5511977776666","contactName":"Cliente Meta A","direction":"inbound","body":"Preciso de orçamento urgente","providerMessageId":"wamid.ok.1"}]'::jsonb
+  ) ->> 'processed')::integer$$,
+  $$values (1)$$,
+  'Webhook Meta válido registra conversa no tenant correto'
+);
+reset role;
+
+-- Simula conversa vencida (>24h) no Tenant A e valida trava rígida + isolamento no Tenant B
+update public.whatsapp_threads
+set last_customer_message_at = now() - interval '25 hours'
+where organization_id = 'a0000000-0000-0000-0000-000000000001'
+  and phone = '5511977776666';
+
+select set_config('request.jwt.claims', '{"sub":"20000000-0000-0000-0000-000000000002","role":"authenticated","email":"owner-b@nexofab.test"}', true);
+set local role authenticated;
+select results_eq(
+  $$select count(*)::bigint from public.whatsapp_threads where phone = '5511977776666'$$,
+  $$values (0::bigint)$$,
+  'Tenant B não enxerga atendimento WhatsApp recebido no Tenant A'
+);
+reset role;
+
+select set_config('request.jwt.claims', '{"sub":"10000000-0000-0000-0000-000000000001","role":"authenticated","email":"owner-a@nexofab.test"}', true);
+set local role authenticated;
+select throws_ok(
+  $$select public.prepare_meta_whatsapp_reply(
+    (select id from public.whatsapp_threads where phone = '5511977776666' limit 1)
+  )$$,
+  'P0001',
+  'Trava de 24h acionada: a janela gratuita da Meta encerrou. Use "Abrir no WhatsApp" para evitar qualquer cobrança.',
+  'Trava rígida de 24h bloqueia envio pela API Meta após o encerramento da janela gratuita'
 );
 reset role;
 

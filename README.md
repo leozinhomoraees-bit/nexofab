@@ -14,7 +14,7 @@ SaaS multiempresa para orçamentos, precificação técnica, plano de corte, pro
 
 1. Crie um projeto Supabase exclusivo e vazio para o NexoFab (ative **Enable Data API** e **Enable RLS on new tables automatically**; mantenha **Grant API access to new tables automatically** desmarcado).
 2. Copie `.env.example` para `.env.local` e informe apenas a URL e a Publishable/anon key do projeto novo, além das variáveis server-side do Asaas Sandbox (`ASAAS_ENVIRONMENT=sandbox`, `ASAAS_API_KEY`, `ASAAS_WEBHOOK_TOKEN`).
-3. Aplique todas as 45 migrations em `supabase/migrations/`, em ordem cronológica.
+3. Aplique todas as 46 migrations em `supabase/migrations/`, em ordem cronológica.
 4. Registre no banco o hash SHA-256 do `ASAAS_WEBHOOK_TOKEN` na tabela privada `private.webhook_secrets`:
    ```sql
    insert into private.webhook_secrets (provider, token_hash)
@@ -37,6 +37,7 @@ SaaS multiempresa para orçamentos, precificação técnica, plano de corte, pro
   - Cancelamento de renovação em autoatendimento (`POST /api/gestao/assinatura/cancelar`) mantendo acesso até o fim do período já pago.
   - Bloqueio gracioso (`402 SUBSCRIPTION_REQUIRED`) em todas as escritas operacionais após vencimento, mantendo leituras, **Minha empresa** e **Assinatura** acessíveis para regularização.
 - **Portal público de orçamento (`/p/[slug]`)**: configurável em **Gestão > Minha empresa** (opt-in + slug exclusivo), com identidade da empresa, validação estrita, antispam, rate limiting persistido (`private.public_lead_rate_limits`), abertura automática de orçamento (`source = 'site'`) e notificação no sino.
+- **Central de Atendimentos & WhatsApp Oficial (Meta Cloud API)**: aba **Atendimentos** com fila anti-esquecimento, alertas de clientes sem resposta e orçamentos parados no sino e via notificações nativas do navegador, além de webhook oficial da Meta (`/api/webhooks/whatsapp/[orgId]`, zero `service_role`) nos modos **Somente Alerta (R$ 0)** e **Trava rígida de 24h** (bloqueio no banco após 23h50, sem envio de templates pagos).
 - **Páginas legais**: `/termos` e `/privacidade` (LGPD).
 
 ## Verificações de qualidade
@@ -49,7 +50,7 @@ npm audit --omit=dev
 supabase test db
 ```
 
-O teste SQL (`supabase/tests/tenant_isolation.sql`, 44 asserções pgTAP) deve ser executado apenas em um Supabase local descartável — nunca diretamente em produção.
+O teste SQL (`supabase/tests/tenant_isolation.sql`, 49 asserções pgTAP) deve ser executado apenas em um Supabase local descartável — nunca diretamente em produção.
 
 ## Modelo de segurança
 

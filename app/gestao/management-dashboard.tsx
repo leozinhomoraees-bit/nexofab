@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { BarChart3, Boxes, Building2, Calculator, CircleDollarSign, ClipboardList, CreditCard, Factory, Gavel, Home, LoaderCircle, LogOut, Plus, Scissors, Search, UserCog, Users } from "lucide-react";
+import { BarChart3, Boxes, Building2, Calculator, CircleDollarSign, ClipboardList, CreditCard, Factory, Gavel, Home, LoaderCircle, LogOut, MessageSquareMore, Plus, Scissors, Search, UserCog, Users } from "lucide-react";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ function PanelLoading() {
 }
 
 const QuotesPanel = dynamic(() => import("./commercial-panels").then((mod) => mod.QuotesPanel), { loading: PanelLoading });
+const AttendancePanel = dynamic(() => import("./attendance-panel").then((mod) => mod.AttendancePanel), { loading: PanelLoading });
 const CustomersPanel = dynamic(() => import("./commercial-panels").then((mod) => mod.CustomersPanel), { loading: PanelLoading });
 const PricingPanel = dynamic(() => import("./pricing-panel").then((mod) => mod.PricingPanel), { loading: PanelLoading });
 const ProductionPanel = dynamic(() => import("./management-panels").then((mod) => mod.ProductionPanel), { loading: PanelLoading });
@@ -37,6 +38,7 @@ const CompanySettingsPanel = dynamic(() => import("./company-settings-panel").th
 
 const menu = [
   ["visao-geral", Home, "Visão geral"],
+  ["atendimentos", MessageSquareMore, "Atendimentos"],
   ["orcamentos", ClipboardList, "Orçamentos"],
   ["precificacao", Calculator, "Precificação"],
   ["licitacoes", Gavel, "Licitações"],
@@ -60,6 +62,7 @@ function isSectionAllowed(key: string, role: string): boolean {
   if (!validMenuKeys.has(key)) return false;
   if (["equipe", "assinatura"].includes(key)) return ["owner", "admin"].includes(role);
   if (key === "relatorios") return ["owner", "admin", "financeiro"].includes(role);
+  if (key === "atendimentos") return ["owner", "admin", "comercial", "financeiro", "producao"].includes(role);
   if (["financeiro", "licitacoes"].includes(key)) return ["owner", "admin", "financeiro", "comercial"].includes(role);
   return true;
 }
@@ -123,7 +126,7 @@ export function ManagementDashboard({ userName, initialSection = "visao-geral", 
     <SidebarContent><SidebarGroup><SidebarGroupLabel>GESTÃO</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{menu.filter(([key]) => isSectionAllowed(key, activeRole)).map(([key, Icon, label]) => <SidebarMenuItem key={label}><SidebarMenuButton isActive={section === key} tooltip={label} onClick={() => { setQuoteComposer(0); if (key === "financeiro") setFinanceSection(["owner", "admin", "financeiro"].includes(activeRole) ? "payables" : "commissions"); selectSection(key as MenuKey); }}><Icon/><span>{key === "financeiro" && activeRole === "comercial" ? "Comissões" : label}</span></SidebarMenuButton></SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent>
     <SidebarFooter><SidebarMenu><SidebarMenuItem><form action="/auth/signout" method="post"><SidebarMenuButton type="submit"><LogOut/><span>Sair</span></SidebarMenuButton></form></SidebarMenuItem></SidebarMenu></SidebarFooter>
   </Sidebar><SidebarInset className="dash-shell">
-    <header className="dash-header"><SidebarTrigger/><label className="organization-switcher"><Building2/><select aria-label="Empresa ativa" value={activeOrganizationId} disabled={switchingOrganization} onChange={(event) => void switchOrganization(event.target.value)}>{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.trade_name}</option>)}</select></label><div className="dash-search"><Search/><Input aria-label="Buscar nesta área" placeholder="Buscar nesta área..." value={search} onChange={(event) => setSearch(event.target.value)}/></div>{canCreateQuote && <Button className="dash-new-quote" onClick={() => { setQuoteOpenRequest(null); setQuotePrefill(null); selectSection("orcamentos"); setQuoteComposer((value) => value + 1); }}><Plus/>Novo orçamento</Button>}<NotificationCenter onOpenQuotes={(quoteId) => { setQuoteComposer(0); setQuotePrefill(null); if (quoteId) setQuoteOpenRequest({ id: quoteId, request: Date.now() }); selectSection("orcamentos"); }} onOpenProduction={() => { setQuoteComposer(0); selectSection("producao"); }}/><div className="user-chip"><span>{userName.slice(0, 1).toUpperCase()}</span><div><b>{userName.split("@")[0]}</b><small>{activeRole === "owner" ? "Proprietário" : activeRole}</small></div></div></header>
+    <header className="dash-header"><SidebarTrigger/><label className="organization-switcher"><Building2/><select aria-label="Empresa ativa" value={activeOrganizationId} disabled={switchingOrganization} onChange={(event) => void switchOrganization(event.target.value)}>{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.trade_name}</option>)}</select></label><div className="dash-search"><Search/><Input aria-label="Buscar nesta área" placeholder="Buscar nesta área..." value={search} onChange={(event) => setSearch(event.target.value)}/></div>{canCreateQuote && <Button className="dash-new-quote" onClick={() => { setQuoteOpenRequest(null); setQuotePrefill(null); selectSection("orcamentos"); setQuoteComposer((value) => value + 1); }}><Plus/>Novo orçamento</Button>}<NotificationCenter onOpenQuotes={(quoteId) => { setQuoteComposer(0); setQuotePrefill(null); if (quoteId) setQuoteOpenRequest({ id: quoteId, request: Date.now() }); selectSection("orcamentos"); }} onOpenProduction={() => { setQuoteComposer(0); selectSection("producao"); }} onOpenAttendance={() => { setQuoteComposer(0); selectSection("atendimentos"); }}/><div className="user-chip"><span>{userName.slice(0, 1).toUpperCase()}</span><div><b>{userName.split("@")[0]}</b><small>{activeRole === "owner" ? "Proprietário" : activeRole}</small></div></div></header>
     <main className="dash-main">
       {section !== "assinatura" && (subscriptionSummary.status === "trialing" || subscriptionSummary.isReadOnly) && (
         <div className={`billing-banner ${subscriptionSummary.tone}`}>
@@ -132,6 +135,21 @@ export function ManagementDashboard({ userName, initialSection = "visao-geral", 
         </div>
       )}
       {section === "visao-geral" && <OverviewPanel onNavigate={navigate}/>}
+      {section === "atendimentos" && isSectionAllowed("atendimentos", activeRole) && <AttendancePanel
+        search={search}
+        onOpenQuote={(quoteId) => {
+          setQuoteComposer(0);
+          setQuotePrefill(null);
+          setQuoteOpenRequest({ id: quoteId, request: Date.now() });
+          selectSection("orcamentos");
+        }}
+        onCreateQuote={() => {
+          setQuoteOpenRequest(null);
+          setQuotePrefill(null);
+          selectSection("orcamentos");
+          setQuoteComposer((value) => value + 1);
+        }}
+      />}
       {section === "orcamentos" && <QuotesPanel
         key={quoteComposer}
         search={search}
