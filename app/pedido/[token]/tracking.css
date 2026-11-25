@@ -1,0 +1,574 @@
+.tracking-shell {
+  min-height: 100vh;
+  padding: clamp(16px, 4vw, 40px) 16px;
+  display: grid;
+  place-items: start center;
+  background:
+    radial-gradient(900px 420px at 90% -10%, rgba(25, 211, 197, 0.14), transparent 60%),
+    radial-gradient(640px 360px at 8% 0%, rgba(198, 240, 84, 0.11), transparent 58%),
+    #f2f6f7;
+  color: #102930;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+}
+
+.tracking-state-card {
+  margin-top: 10vh;
+  width: min(460px, 100%);
+  padding: 36px 28px;
+  border: 1px solid #dbe7e7;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 20px 50px rgba(10, 34, 42, 0.08);
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 12px;
+}
+
+.tracking-state-card svg {
+  width: 34px;
+  height: 34px;
+  color: #0e8b81;
+}
+
+.tracking-state-card.error svg {
+  color: #cf442e;
+}
+
+.tracking-state-card h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.tracking-state-card p {
+  margin: 0;
+  color: #5b7278;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.tracking-card {
+  width: min(820px, 100%);
+  border: 1px solid #d9e6e6;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 24px 68px rgba(7, 25, 34, 0.09);
+  overflow: hidden;
+  display: grid;
+}
+
+.tracking-brand-bar {
+  padding: 18px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #e6efef;
+  background: #ffffff;
+}
+
+.tracking-brand-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tracking-logo {
+  max-height: 44px;
+  max-width: 160px;
+  object-fit: contain;
+}
+
+.tracking-monogram {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #071724 0%, #0e4750 100%);
+  color: #c6f054;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.tracking-brand-identity b {
+  display: block;
+  color: #0d2730;
+  font-size: 16px;
+}
+
+.tracking-brand-identity small {
+  color: #627a80;
+  font-size: 12px;
+}
+
+.tracking-refresh-btn {
+  min-height: 36px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #d3e2e2;
+  border-radius: 999px;
+  background: #f6fbfb;
+  color: #16484e;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tracking-refresh-btn:hover {
+  border-color: #0e8b81;
+  background: #e9f8f5;
+}
+
+.tracking-refresh-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.tracking-hero {
+  padding: 26px 24px;
+  background: linear-gradient(135deg, #071724 0%, #0d2e3d 60%, #10494c 100%);
+  color: #ffffff;
+  display: grid;
+  gap: 10px;
+}
+
+.tracking-hero.completed {
+  background: linear-gradient(135deg, #072320 0%, #0d574f 65%, #12786d 100%);
+}
+
+.tracking-hero.cancelled {
+  background: linear-gradient(135deg, #2b1414 0%, #5e221b 100%);
+}
+
+.tracking-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tracking-order-code {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tracking-status-pill {
+  padding: 5px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  background: #c6f054;
+  color: #071a18;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.tracking-status-pill svg {
+  width: 14px;
+  height: 14px;
+}
+
+.tracking-status-pill.stage-aprovacao {
+  background: #ffd970;
+  color: #3f2804;
+}
+
+.tracking-status-pill.stage-cancelado {
+  background: #ffcbc4;
+  color: #6a1b12;
+}
+
+.tracking-hero h1 {
+  margin: 0;
+  font-size: clamp(21px, 3.2vw, 28px);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.tracking-customer-line {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+}
+
+.tracking-customer-line strong {
+  color: #ffffff;
+}
+
+.tracking-status-desc {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.tracking-progress-track {
+  margin-top: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.tracking-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #19d3c5 0%, #c6f054 100%);
+  transition: width 0.35s ease;
+}
+
+.tracking-artwork-cta {
+  margin: 20px 24px 0;
+  padding: 16px 18px;
+  border: 1px solid #f0c975;
+  border-radius: 14px;
+  background: #fff9ec;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.tracking-artwork-cta-copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+  min-width: 220px;
+}
+
+.tracking-artwork-cta-copy > span {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #f5b93a;
+  color: #2f1f04;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+.tracking-artwork-cta-copy > span svg {
+  width: 19px;
+  height: 19px;
+}
+
+.tracking-artwork-cta-copy small {
+  display: block;
+  color: #9e650b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.tracking-artwork-cta-copy b {
+  display: block;
+  color: #2f1f04;
+  font-size: 15px;
+  margin: 2px 0;
+}
+
+.tracking-artwork-cta-copy p {
+  margin: 0;
+  color: #6b4e16;
+  font-size: 13px;
+}
+
+.tracking-artwork-btn {
+  min-height: 40px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  background: #0c2635;
+  color: #c6f054;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.tracking-artwork-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.tracking-schedule-strip {
+  padding: 18px 24px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  border-bottom: 1px solid #e8f0f0;
+  background: #f9fcfc;
+}
+
+.tracking-schedule-strip > div {
+  padding: 12px 14px;
+  border: 1px solid #e1ecec;
+  border-radius: 12px;
+  background: #ffffff;
+  display: grid;
+  gap: 3px;
+}
+
+.tracking-schedule-strip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #5c757a;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.tracking-schedule-strip span svg {
+  width: 13px;
+  height: 13px;
+  color: #0e8b81;
+}
+
+.tracking-schedule-strip b {
+  color: #112f36;
+  font-size: 14px;
+}
+
+.tracking-schedule-strip small {
+  color: #6c8186;
+  font-size: 11.5px;
+}
+
+.tracking-timeline {
+  padding: 22px 24px;
+  border-bottom: 1px solid #e8f0f0;
+  display: grid;
+  gap: 16px;
+}
+
+.tracking-timeline h2,
+.tracking-items h2 {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #12333a;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.tracking-items h2 svg {
+  width: 17px;
+  height: 17px;
+  color: #0e8b81;
+}
+
+.tracking-timeline ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tracking-timeline li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.tracking-timeline .step-node {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #d4e2e2;
+  background: #f5f9f9;
+  color: #82979c;
+  position: relative;
+  z-index: 1;
+}
+
+.tracking-timeline .step-node svg {
+  width: 18px;
+  height: 18px;
+}
+
+.tracking-timeline li.done .step-node {
+  border-color: #0e8b81;
+  background: #0e8b81;
+  color: #ffffff;
+}
+
+.tracking-timeline li.current .step-node {
+  border-color: #0c2635;
+  background: #c6f054;
+  color: #071724;
+  box-shadow: 0 0 0 6px rgba(198, 240, 84, 0.35);
+}
+
+.tracking-timeline .step-body {
+  display: grid;
+  gap: 2px;
+}
+
+.tracking-timeline .step-body b {
+  color: #13343b;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.tracking-timeline li.pending .step-body b {
+  color: #7c9196;
+}
+
+.tracking-timeline .step-body small {
+  color: #6b8085;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.tracking-items {
+  padding: 20px 24px;
+  border-bottom: 1px solid #e8f0f0;
+  display: grid;
+  gap: 12px;
+}
+
+.tracking-items ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.tracking-items li {
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #e2eded;
+  border-radius: 11px;
+  background: #fafdfd;
+}
+
+.tracking-items li div {
+  display: grid;
+  gap: 3px;
+}
+
+.tracking-items li b {
+  color: #13353b;
+  font-size: 13.5px;
+}
+
+.tracking-items li small {
+  color: #637b80;
+  font-size: 12px;
+}
+
+.tracking-items li > span {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #e7f6f3;
+  color: #0b6f67;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.tracking-footer {
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: #f7fbfb;
+}
+
+.tracking-footer-note b {
+  display: block;
+  color: #13353b;
+  font-size: 14px;
+}
+
+.tracking-footer-note p {
+  margin: 3px 0 0;
+  color: #5c7479;
+  font-size: 12.5px;
+}
+
+.tracking-whatsapp-btn {
+  min-height: 42px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 11px;
+  background: #179b55;
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: 0 10px 24px rgba(23, 155, 85, 0.24);
+}
+
+.tracking-whatsapp-btn:hover {
+  background: #138548;
+}
+
+.tracking-whatsapp-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+@media (max-width: 760px) {
+  .tracking-schedule-strip {
+    grid-template-columns: 1fr;
+  }
+  .tracking-timeline ol {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .tracking-timeline li {
+    grid-template-columns: auto 1fr;
+    justify-items: start;
+    text-align: left;
+    align-items: center;
+    gap: 12px;
+  }
+  .tracking-brand-bar,
+  .tracking-hero,
+  .tracking-schedule-strip,
+  .tracking-timeline,
+  .tracking-items,
+  .tracking-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .tracking-artwork-cta {
+    margin: 16px 16px 0;
+  }
+  .tracking-whatsapp-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

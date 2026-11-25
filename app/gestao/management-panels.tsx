@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowRight, Boxes, CalendarClock, CalendarDays, Check, CheckCircle2, CircleDollarSign, ClipboardCheck, ClipboardList, Columns3, Factory, FileText, Gauge, GripVertical, LayoutGrid, MapPin, MessageCircle, Navigation, PackageCheck, Palette, Play, Plus, Printer, RefreshCw, Sparkles, Tag, Target, TrendingUp, Tv, Users, WalletCards, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Boxes, CalendarClock, CalendarDays, Check, CheckCircle2, CircleDollarSign, ClipboardCheck, ClipboardList, Columns3, Copy, ExternalLink, Factory, FileText, Gauge, GripVertical, LayoutGrid, Link2, MapPin, MessageCircle, Navigation, PackageCheck, Palette, Play, Plus, Printer, RefreshCw, Sparkles, Tag, Target, TrendingUp, Tv, Users, WalletCards, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -251,7 +251,7 @@ type ProductionReservation = { id: string; planned_quantity: number; reserved_qu
 type ProductionActualEntry = { id: string; entry_type: string; description: string; quantity: number; unit: string; unit_cost: number; total_cost: number; notes?: string | null; occurred_at: string };
 type ProductionArtworkApproval = { id: string; version: number; title: string; file_url: string; content_type?: string | null; public_token: string; status: string; customer_notes?: string | null; responded_at?: string | null; created_at: string };
 type ProductionStaff = { id: string; full_name?: string | null; role: string };
-type ProductionOrder = { id: string; number: number; quote_id?: string | null; title: string; description?: string | null; stage: string; priority: string; due_at?: string | null; scheduled_start_at?: string | null; responsible_id?: string | null; delivery_mode?: DeliveryMode | null; scheduled_time?: string | null; site_address?: string | null; site_notes?: string | null; customer_address?: string | null; started_at?: string | null; completed_at?: string | null; created_at: string; updated_at?: string; production_material_reservations?: ProductionReservation[]; production_actual_entries?: ProductionActualEntry[]; production_artwork_approvals?: ProductionArtworkApproval[]; quotes?: { id?: string; number?: number; customer_name?: string; company?: string | null; phone?: string | null; email?: string | null; service?: string; details?: string | null; internal_notes?: string | null; estimated_value?: number | null; delivery_days?: number | null; payment_terms?: string | null; installation_included?: boolean; quote_items?: ProductionItem[] } | null };
+type ProductionOrder = { id: string; number: number; quote_id?: string | null; title: string; description?: string | null; stage: string; priority: string; due_at?: string | null; scheduled_start_at?: string | null; responsible_id?: string | null; delivery_mode?: DeliveryMode | null; scheduled_time?: string | null; site_address?: string | null; site_notes?: string | null; customer_address?: string | null; public_tracking_token?: string | null; started_at?: string | null; completed_at?: string | null; created_at: string; updated_at?: string; production_material_reservations?: ProductionReservation[]; production_actual_entries?: ProductionActualEntry[]; production_artwork_approvals?: ProductionArtworkApproval[]; quotes?: { id?: string; number?: number; customer_name?: string; company?: string | null; phone?: string | null; email?: string | null; service?: string; details?: string | null; internal_notes?: string | null; estimated_value?: number | null; delivery_days?: number | null; payment_terms?: string | null; installation_included?: boolean; quote_items?: ProductionItem[] } | null };
 type ProductionReminder = { order: ProductionOrder; kind: "overdue" | "due" | "pending"; title: string; text: string };
 type ProductionUpdateResult = { ok: boolean; stockDeducted?: boolean; negativeStockAllowed?: boolean; error?: string };
 type ProductionChanges = Record<string, string | boolean | null>;
@@ -417,7 +417,17 @@ export function ProductionPanel({ search, initialOrderId }: { search: string; in
       notify(response.error ?? "Não foi possível reagendar a ordem de serviço.", "error");
     }
   }
-  function contact(order: ProductionOrder) { const destination = whatsappUrl(order.quotes?.phone, `Olá, ${order.quotes?.customer_name ?? "cliente"}! Estamos atualizando a produção do seu pedido #${order.quotes?.number ?? order.number} — ${order.quotes?.service ?? order.title}. A etapa atual é: ${stageLabel[order.stage] ?? order.stage}.`); if (!destination) { setMessage("Cadastre um WhatsApp válido no cliente deste pedido antes de enviar a atualização."); return; } window.open(destination, "_blank", "noopener,noreferrer"); }
+  function contact(order: ProductionOrder) {
+    const trackingUrl = order.public_tracking_token && typeof window !== "undefined"
+      ? `${window.location.origin}/pedido/${order.public_tracking_token}`
+      : "";
+    const text = trackingUrl
+      ? `Olá, ${order.quotes?.customer_name ?? "cliente"}! Seu pedido OS-${order.number} (${order.quotes?.service ?? order.title}) está na etapa: ${stageLabel[order.stage] ?? order.stage}. Acompanhe o andamento em tempo real por aqui: ${trackingUrl}`
+      : `Olá, ${order.quotes?.customer_name ?? "cliente"}! Estamos atualizando a produção do seu pedido #${order.quotes?.number ?? order.number} — ${order.quotes?.service ?? order.title}. A etapa atual é: ${stageLabel[order.stage] ?? order.stage}.`;
+    const destination = whatsappUrl(order.quotes?.phone, text);
+    if (!destination) { setMessage("Cadastre um WhatsApp válido no cliente deste pedido antes de enviar a atualização."); return; }
+    window.open(destination, "_blank", "noopener,noreferrer");
+  }
   return <><SectionHeading eyebrow="CHÃO DE FÁBRICA · PCP" title="Produção" description="Arraste ordens entre etapas no Kanban, organize instalações na Agenda ou acompanhe na TV da fábrica." action={<div className="production-head-actions"><Button variant="outline" onClick={() => switchView(viewMode === "agenda" ? "kanban" : "agenda")}><CalendarDays/>{viewMode === "agenda" ? "Voltar ao Kanban" : "Agenda de campo"}</Button><Button variant="outline" onClick={() => setTvMode(true)}><Tv/>Modo TV (Fábrica)</Button></div>}/>
     <section className="production-kpis"><button type="button" className={stageFilter === "ativos" ? "active" : ""} onClick={() => setStageFilter("ativos")}><ClipboardCheck/><span><small>ORDENS ATIVAS</small><b>{summary.active}</b></span></button><button type="button" className={stageFilter === "aguardando_programacao" ? "active" : ""} onClick={() => setStageFilter("aguardando_programacao")}><Sparkles/><span><small>A PROGRAMAR</small><b>{summary.awaiting}</b></span></button><button type="button" className={stageFilter === "em_producao" ? "active" : ""} onClick={() => setStageFilter("em_producao")}><Play/><span><small>EM PRODUÇÃO</small><b>{summary.inProduction}</b></span></button><button type="button" className={`${summary.overdue ? "danger" : ""} ${stageFilter === "atrasados" ? "active" : ""}`} onClick={() => setStageFilter("atrasados")}><CalendarClock/><span><small>PRAZO VENCIDO</small><b>{summary.overdue}</b></span></button><button type="button" className={stageFilter === "concluido" ? "active" : ""} onClick={() => setStageFilter("concluido")}><CheckCircle2/><span><small>CONCLUÍDAS</small><b>{summary.completed}</b></span></button></section>
     {reminders.length > 0 && <section className="production-reminders"><header><div><small>LEMBRETES AUTOMÁTICOS</small><h2>O que precisa de atenção agora</h2><p>Os avisos permanecem ativos até a etapa ou o prazo da ordem ser atualizado.</p></div><span>{reminders.length} pendência(s)</span></header><div>{reminders.slice(0, 8).map(({ order, kind, title, text }) => <button type="button" key={`${order.id}-${kind}`} className={kind} onClick={() => { setSelectedAutoFinalize(false); setSelected(order); }}><span>{kind === "overdue" ? <AlertTriangle/> : kind === "due" ? <CalendarClock/> : <Factory/>}</span><div><small>{title}</small><b>OS-{order.number} · {order.quotes?.company || order.quotes?.customer_name || "Cliente"}</b><p>{order.quotes?.service || order.title}</p><em>{text}</em></div><ArrowRight/></button>)}</div></section>}
@@ -705,6 +715,43 @@ function ProductionOrderDialog({ order, staff, advancedControl, scheduleColumnsR
           </div>
         </section>
       )}
+      <section className="os-tracking-share-bar no-print" aria-label="Link público de acompanhamento da OS">
+        <div className="os-tracking-share-copy">
+          <span><Link2/></span>
+          <div>
+            <small>RASTREIO DO CLIENTE</small>
+            <b>Link de acompanhamento em tempo real</b>
+            <p>{order.public_tracking_token ? "Envie para o cliente acompanhar a produção sem precisar perguntar no WhatsApp (não exibe valores nem custos internos)." : "Execute a migration 202611250002_public_order_tracking.sql no Supabase para ativar o link de acompanhamento."}</p>
+          </div>
+        </div>
+        {order.public_tracking_token && (
+          <div className="os-tracking-share-actions">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const url = `${window.location.origin}/pedido/${order.public_tracking_token}`;
+                void navigator.clipboard.writeText(url);
+                setOperationMessage("OK:Link de acompanhamento copiado para a área de transferência.");
+              }}
+            >
+              <Copy/>Copiar link
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => window.open(`/pedido/${order.public_tracking_token}`, "_blank", "noopener,noreferrer")}
+            >
+              <ExternalLink/>Visualizar
+            </Button>
+            <Button type="button" size="sm" onClick={onWhatsApp}>
+              <MessageCircle/>Enviar no WhatsApp
+            </Button>
+          </div>
+        )}
+      </section>
       <section className="production-order-identity"><div><small>CLIENTE</small><b>{order.quotes?.company || order.quotes?.customer_name || "—"}</b><span>{order.quotes?.customer_name}{order.quotes?.phone ? ` · ${order.quotes.phone}` : ""}</span></div><div><small>PROJETO</small><b>{order.quotes?.service || order.title}</b><span>{order.quotes?.payment_terms || "Condição de pagamento não informada"}</span></div><div><small>PRAZO</small><b>{showDate(order.due_at)}</b><span>Prioridade {order.priority}</span></div></section>
       <section className="production-order-items"><h3>Itens para produzir</h3>{items.length ? items.map((item, index) => <article key={item.id}><span>{index + 1}</span><div><b>{item.description}</b><small>{[item.material, item.service_type].filter(Boolean).join(" · ") || "Sem material informado"}{item.width_mm && item.height_mm ? ` · ${item.width_mm} × ${item.height_mm}${item.depth_mm ? ` × ${item.depth_mm}` : ""} mm` : ""}</small>{item.production_notes && <p>{item.production_notes}</p>}</div><strong>{Number(item.quantity)} {item.unit}</strong></article>) : <p className="production-order-empty">Este orçamento não possui itens detalhados.</p>}</section>
       {advancedControl && <section className="production-material-control"><div className="production-control-title"><div><small>MATERIAIS DA ORDEM</small><h3>Reserva automática</h3></div><span className={reservations.some((item) => item.status === "insuficiente") ? "danger" : "ok"}>{reservations.length ? reservations.some((item) => item.status === "insuficiente") ? "Há falta de material" : "Materiais reservados" : "Sem consumo vinculado"}</span></div>{reservations.length ? <div className="production-reservation-list">{reservations.map((reservation) => { const stock = reservation.inventory_items; return <article key={reservation.id} className={reservation.status === "insuficiente" ? "shortage" : ""}><div><b>{stock?.name ?? "Insumo"}</b><small>{reservation.status === "insuficiente" ? "Saldo insuficiente" : reservation.status === "consumido" ? "Consumido" : "Separado para produção"}</small></div><span><small>NECESSÁRIO</small><b>{Number(reservation.planned_quantity).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} {reservation.unit}</b></span><span><small>EM ESTOQUE</small><b>{Number(stock?.current_quantity ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} {stock?.unit ?? reservation.unit}</b></span></article>; })}</div> : <p className="production-order-empty">Nenhum consumo de estoque foi identificado na memória de cálculo.</p>}</section>}

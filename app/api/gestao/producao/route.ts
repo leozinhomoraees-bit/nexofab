@@ -83,21 +83,33 @@ export async function GET(request: Request) {
   if (offset === 0 && ["admin", "comercial", "producao"].includes(access.role)) await ensureApprovedProductionOrders(access.supabase, access.user.id);
   const quoteSelect = "quotes(id, number, customer_id, customer_name, company, phone, email, service, details, internal_notes, estimated_value, delivery_days, payment_terms, installation_included, quote_items(id, description, service_type, material, width_mm, height_mm, depth_mm, quantity, unit, production_notes, pricing_snapshot, sort_order, selected_by_customer))";
   const detailed = await access.supabase.from("production_orders")
-    .select(`id, number, quote_id, title, description, stage, priority, due_at, scheduled_start_at, responsible_id, delivery_mode, scheduled_time, site_address, site_notes, started_at, completed_at, created_at, updated_at, ${quoteSelect}, production_material_reservations(id, inventory_item_id, planned_quantity, reserved_quantity, consumed_quantity, unit, status, inventory_items(id, name, current_quantity, unit, average_cost)), production_actual_entries(id, entry_type, description, quantity, unit, unit_cost, total_cost, notes, occurred_at)`)
+    .select(`id, number, quote_id, title, description, stage, priority, due_at, scheduled_start_at, responsible_id, delivery_mode, scheduled_time, site_address, site_notes, public_tracking_token, started_at, completed_at, created_at, updated_at, ${quoteSelect}, production_material_reservations(id, inventory_item_id, planned_quantity, reserved_quantity, consumed_quantity, unit, status, inventory_items(id, name, current_quantity, unit, average_cost)), production_actual_entries(id, entry_type, description, quantity, unit, unit_cost, total_cost, notes, occurred_at)`)
     .order("created_at", { ascending: false })
     .range(offset, offset + limit);
   let data: unknown[] | null = detailed.data;
   let scheduleColumnsReady = !detailed.error;
   let advancedReady = !detailed.error;
   if (detailed.error?.code === "42703") {
-    scheduleColumnsReady = false;
-    const withoutSchedule = await access.supabase.from("production_orders")
-      .select(`id, number, quote_id, title, description, stage, priority, due_at, scheduled_start_at, responsible_id, started_at, completed_at, created_at, updated_at, ${quoteSelect}, production_material_reservations(id, inventory_item_id, planned_quantity, reserved_quantity, consumed_quantity, unit, status, inventory_items(id, name, current_quantity, unit, average_cost)), production_actual_entries(id, entry_type, description, quantity, unit, unit_cost, total_cost, notes, occurred_at)`)
+    const withScheduleOnly = await access.supabase.from("production_orders")
+      .select(`id, number, quote_id, title, description, stage, priority, due_at, scheduled_start_at, responsible_id, delivery_mode, scheduled_time, site_address, site_notes, started_at, completed_at, created_at, updated_at, ${quoteSelect}, production_material_reservations(id, inventory_item_id, planned_quantity, reserved_quantity, consumed_quantity, unit, status, inventory_items(id, name, current_quantity, unit, average_cost)), production_actual_entries(id, entry_type, description, quantity, unit, unit_cost, total_cost, notes, occurred_at)`)
       .order("created_at", { ascending: false })
       .range(offset, offset + limit);
-    if (withoutSchedule.error) return Response.json({ error: "Não foi possível carregar a produção." }, { status: 500 });
-    data = withoutSchedule.data;
-    advancedReady = true;
+    if (!withScheduleOnly.error) {
+      data = withScheduleOnly.data;
+      scheduleColumnsReady = true;
+      advancedReady = true;
+    } else if (withScheduleOnly.error.code === "42703") {
+      scheduleColumnsReady = false;
+      const withoutSchedule = await access.supabase.from("production_orders")
+        .select(`id, number, quote_id, title, description, stage, priority, due_at, scheduled_start_at, responsible_id, started_at, completed_at, created_at, updated_at, ${quoteSelect}, production_material_reservations(id, inventory_item_id, planned_quantity, reserved_quantity, consumed_quantity, unit, status, inventory_items(id, name, current_quantity, unit, average_cost)), production_actual_entries(id, entry_type, description, quantity, unit, unit_cost, total_cost, notes, occurred_at)`)
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit);
+      if (withoutSchedule.error) return Response.json({ error: "Não foi possível carregar a produção." }, { status: 500 });
+      data = withoutSchedule.data;
+      advancedReady = true;
+    } else {
+      return Response.json({ error: "Não foi possível carregar a produção." }, { status: 500 });
+    }
   } else if (detailed.error && ["42P01", "PGRST200", "PGRST205"].includes(detailed.error.code)) {
     scheduleColumnsReady = false;
     advancedReady = false;

@@ -4184,3 +4184,62 @@ main.min-h-screen, main.min-h-screen * { font-family:"Sora",sans-serif; }
     align-items: stretch;
   }
 }
+
+/* Barra de compartilhamento do Link de Rastreio na OS */
+.os-tracking-share-bar {
+  margin: 14px 0;
+  padding: 13px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  border: 1px solid #bfe2dc;
+  border-radius: 12px;
+  background: linear-gradient(125deg, #eefaf7 0%, #ffffff 70%);
+}
+.os-tracking-share-copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  flex: 1;
+  min-width: 240px;
+}
+.os-tracking-share-copy > span {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: #0c2635;
+  color: #c6f054;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+.os-tracking-share-copy > span svg {
+  width: 16px;
+  height: 16px;
+}
+.os-tracking-share-copy small {
+  display: block;
+  color: #0e8b81;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.os-tracking-share-copy b {
+  display: block;
+  color: #12333a;
+  font-size: 13.5px;
+}
+.os-tracking-share-copy p {
+  margin: 2px 0 0;
+  color: #556e73;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.os-tracking-share-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
