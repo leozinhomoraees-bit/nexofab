@@ -4,18 +4,27 @@ import { CSSProperties, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
+  BarChart3,
+  BellRing,
   Boxes,
   Calculator,
   Check,
   CircleDollarSign,
   ClipboardList,
+  Columns3,
+  Eye,
   Factory,
   Layers,
   Lock,
+  Minus,
+  QrCode,
   Scissors,
   ShieldCheck,
   Sparkles,
+  Tag,
+  Tv,
   Users,
+  X,
 } from "lucide-react";
 
 type PreviewTabId = "comercial" | "precificacao" | "producao" | "financeiro";
@@ -26,7 +35,6 @@ const previewTabs: Array<{
   label: string;
   icon: typeof ClipboardList;
   kpis: Array<{ label: string; value: string; delta: string }>;
-  rows: Array<{ title: string; subtitle: string; tag: string; tone: "ok" | "lime" | "amber" }>;
   asideKicker: string;
   asideTitle: string;
   asideCopy: string;
@@ -34,79 +42,79 @@ const previewTabs: Array<{
 }> = [
   {
     id: "comercial",
-    label: "Orçamentos & Proposta",
+    label: "Funil & Proposta",
     icon: ClipboardList,
     kpis: [
-      { label: "Propostas abertas", value: "18", delta: "Link público ativo" },
-      { label: "Taxa de aprovação", value: "64%", delta: "Aprovação em 1 clique" },
-      { label: "Ticket médio", value: "R$ 3.480", delta: "Com alternativas" },
+      { label: "Funil ativo", value: "R$ 44.500", delta: "18 propostas em aberto" },
+      { label: "Conversão real", value: "64%", delta: "Aprovação em 1 clique" },
+      { label: "Rastreio ao vivo", value: "Vista 3x", delta: "Alerta quando cliente abre" },
     ],
-    rows: [
-      { title: "Fachada ACM 4,80 × 1,20m + Letra Caixa LED", subtitle: "Proposta #1042 · Cliente escolheu Opção B", tag: "Aprovada", tone: "lime" },
-      { title: "Kit Sinalização Interna · 24 placas acrílico", subtitle: "Proposta #1045 · Link enviado via WhatsApp", tag: "Aguardando", tone: "amber" },
-      { title: "Adesivo perfurado vitrine + instalação", subtitle: "Proposta #1048 · Convertida automaticamente", tag: "Em produção", tone: "ok" },
+    asideKicker: "COMERCIAL ANTI-ESQUECIMENTO",
+    asideTitle: "Funil Kanban, rastreio de abertura e portal de pedidos.",
+    asideCopy:
+      "Arraste propostas pelo funil, receba aviso na tela quando o cliente abrir o link ou ficar sem resposta e receba pedidos 24h pelo seu portal /p/sua-empresa.",
+    bullets: [
+      "Funil Kanban com soma em R$ por coluna",
+      "Selo 'Vista Xx' + alerta no sino e na tela do PC",
+      "Portal público /p/sua-empresa e Central de Atendimentos",
     ],
-    asideKicker: "COMERCIAL SEM ATRITO",
-    asideTitle: "Seu cliente aprova a proposta online com a sua marca.",
-    asideCopy: "Envie alternativas de material ou acabamento no mesmo link. Quando ele aprova, a versão fica congelada e a OS já nasce pronta.",
-    bullets: ["Proposta pública personalizada com sua logo", "Alternativas selecionáveis pelo cliente", "Histórico completo de revisões"],
   },
   {
     id: "precificacao",
-    label: "Precificação & Corte",
+    label: "Chapa & Bobina",
     icon: Calculator,
     kpis: [
-      { label: "Aproveitamento chapa", value: "87,4%", delta: "Plano de corte otimizado" },
-      { label: "Margem líquida", value: "38,2%", delta: "Custos fixos inclusos" },
-      { label: "Perda calculada", value: "12,6%", delta: "Sem chute no preço" },
+      { label: "Aproveitamento", value: "87,4%", delta: "Chapa ACM 122×500 cm" },
+      { label: "Sobra real", value: "12,6%", delta: "Calculada antes de orçar" },
+      { label: "Margem líquida", value: "38,2%", delta: "Hora-máquina + fixos" },
     ],
-    rows: [
-      { title: "Chapa ACM 3mm Preto Fosco (1220 × 5000mm)", subtitle: "6 peças encaixadas · 1 chapa reservada", tag: "Otimizado", tone: "ok" },
-      { title: "Router CNC · 1h 40min + fresa 6mm", subtitle: "Custo hora/máquina + consumíveis aplicados", tag: "Calculado", tone: "lime" },
-      { title: "Vinil adesivo brilho 1,22m + laminação", subtitle: "Cálculo automático por m² + margem alvo", tag: "Pronto", tone: "ok" },
+    asideKicker: "MARGEM PROTEGIDA NA ORIGEM",
+    asideTitle: "Encaixe visual de chapas, bobinas e arquivos DXF/SVG.",
+    asideCopy:
+      "Digite medidas retangulares em centímetros (ACM, MDF, Acrílico, Vinil ou Lona) e veja o mapa de corte na hora — ou importe DXF/SVG para Laser e Router CNC.",
+    bullets: [
+      "Encaixe rápido por medida sem precisar de arquivo vetorial",
+      "Importação DXF/SVG para RDWorks e Aspire",
+      "Leva o custo exato direto para o orçamento em 1 clique",
     ],
-    asideKicker: "MARGEM REAL PROTEGIDA",
-    asideTitle: "Pare de perder dinheiro em orçamento feito no olho.",
-    asideCopy: "Combine chapas, insumos, tempo de máquina, mão de obra e plano de corte para formar preços seguros em segundos.",
-    bullets: ["Plano de corte visual enviado direto ao orçamento", "Receitas de custo por produto e variante", "Ponto de equilíbrio conectado ao financeiro"],
   },
   {
     id: "producao",
-    label: "Produção & Arte",
+    label: "Kanban PCP & TV",
     icon: Factory,
     kpis: [
-      { label: "OS em andamento", value: "12", delta: "Briefing até expedição" },
-      { label: "Artes aprovadas", value: "9 / 10", delta: "Link de prova online" },
-      { label: "Insumos reservados", value: "100%", delta: "Estoque sincronizado" },
+      { label: "OS no chão", value: "12 ordens", delta: "Kanban arrastar e soltar" },
+      { label: "QR Code na OS", value: "1 toque", delta: "Operador avança no celular" },
+      { label: "Modo TV PCP", value: "Ao vivo", delta: "Atualiza a cada 30s" },
     ],
-    rows: [
-      { title: "OS #318 · Totem luminoso recepção", subtitle: "Arte v2 aprovada pelo cliente · CNC liberada", tag: "Produção", tone: "lime" },
-      { title: "OS #321 · Painel MDF fresado + pintura", subtitle: "3 chapas reservadas automaticamente", tag: "Acabamento", tone: "ok" },
-      { title: "OS #325 · Plotagem frota 2 veículos", subtitle: "Aguardando aprovação da arte v1", tag: "Prova de arte", tone: "amber" },
+    asideKicker: "CHÃO DE FÁBRICA NÍVEL ERP GIGANTE",
+    asideTitle: "Kanban PCP, Modo TV, QR Code e Etiquetas de Volume.",
+    asideCopy:
+      "Arraste ordens entre etapas, deixe a TV da oficina mostrando atrasos e prioridades em tempo real, imprima OS com QR Code e gere etiquetas térmicas ou A4 de expedição.",
+    bullets: [
+      "Kanban visual de 8 etapas com baixa automática de estoque",
+      "QR Code na folha da OS + botão de avanço rápido no celular",
+      "Etiquetas de volume (100×150mm ou A4) + prova de arte online",
     ],
-    asideKicker: "CHÃO DE FÁBRICA ORGANIZADO",
-    asideTitle: "Arte aprovada antes de ligar a máquina.",
-    asideCopy: "Acompanhe cada etapa da ordem de produção, registre custos reais, reserve estoque automaticamente e evite retrabalho.",
-    bullets: ["Link público de aprovação de arte por versão", "Reserva e baixa automática de insumos", "Responsáveis e prazos por ordem de produção"],
   },
   {
     id: "financeiro",
-    label: "Financeiro & Caixa",
-    icon: CircleDollarSign,
+    label: "BI & Financeiro",
+    icon: BarChart3,
     kpis: [
-      { label: "Recebido no mês", value: "R$ 48.900", delta: "Entrada + parcelas" },
-      { label: "A receber (30d)", value: "R$ 19.450", delta: "Alertas de vencimento" },
-      { label: "Ponto de equilíbrio", value: "118%", delta: "Meta superada" },
+      { label: "Entradas (mês)", value: "R$ 48.900", delta: "+18% vs. mês anterior" },
+      { label: "Ponto de equilíbrio", value: "118%", delta: "Meta operacional batida" },
+      { label: "Lucro líquido", value: "R$ 17.640", delta: "DRE + fluxo projetado" },
     ],
-    rows: [
-      { title: "Entrada 50% · Proposta #1042 (PIX)", subtitle: "Recibo digital público emitido automaticamente", tag: "Recebido", tone: "lime" },
-      { title: "Fornecedor Chapas Sul · Boleto 2/3", subtitle: "Centro de custo: Produção · Vence em 3 dias", tag: "Agendado", tone: "amber" },
-      { title: "Venda rápida balcão #1049", subtitle: "Pagamento integral + baixa de estoque", tag: "Concluído", tone: "ok" },
+    asideKicker: "INTELIGÊNCIA EXECUTIVA NO CAIXA",
+    asideTitle: "Gráficos de 6 meses, DRE, contas, comissões e recibo.",
+    asideCopy:
+      "Visualize faturamento × despesas × saldo, importe boletos em PDF, acompanhe o ponto de equilíbrio em tempo real e envie recibos digitais profissionais pelo WhatsApp.",
+    bullets: [
+      "Gráficos executivos interativos na Visão Geral e Relatórios",
+      "Contas a pagar/receber parceladas, comissões e Ficha 360º",
+      "Exportação CSV/PDF + recibo digital com sua marca",
     ],
-    asideKicker: "CAIXA SEM SURPRESAS",
-    asideTitle: "Contas a pagar, receber, DRE e recibo em um clique.",
-    asideCopy: "Saiba exatamente quanto entrou, quanto vai vencer, qual o lucro real do mês e envie recibo profissional pelo WhatsApp.",
-    bullets: ["Contas a pagar e receber parceladas", "Recibo digital público com logo da empresa", "DRE gerencial e fluxo de caixa projetado"],
   },
 ];
 
@@ -120,7 +128,23 @@ const marqueeItems = [
   "Displays & PDV",
   "Impressão 3D",
   "Sinalização Corporativa",
-  "Gráficas Sob Medida",
+  "Gráficas Rápidas",
+];
+
+const comparisonRows: Array<{
+  feature: string;
+  spreadsheets: "no" | "partial";
+  legacy: "yes" | "partial" | string;
+  nexofab: "yes" | string;
+}> = [
+  { feature: "Precificação técnica (m², chapa, bobina, hora-máquina e perdas)", spreadsheets: "partial", legacy: "yes", nexofab: "yes" },
+  { feature: "Encaixe visual de chapas/bobinas + importação DXF/SVG", spreadsheets: "no", legacy: "partial", nexofab: "yes" },
+  { feature: "Kanban PCP Drag & Drop + Modo TV de Chão de Fábrica", spreadsheets: "no", legacy: "yes", nexofab: "yes" },
+  { feature: "QR Code na OS (1 toque no celular) + Etiquetas de Volume", spreadsheets: "no", legacy: "partial", nexofab: "yes" },
+  { feature: "Proposta online com rastreio ('Vista Xx') + Portal /p/sua-empresa", spreadsheets: "no", legacy: "partial", nexofab: "yes" },
+  { feature: "Gráficos executivos, DRE, Ponto de Equilíbrio e Recibo Digital", spreadsheets: "partial", legacy: "yes", nexofab: "yes" },
+  { feature: "Taxa de implantação / setup", spreadsheets: "partial", legacy: "R$ 1.000 – R$ 3.500", nexofab: "R$ 0 (usa em 3 min)" },
+  { feature: "Investimento mensal (até 10 usuários inclusos)", spreadsheets: "partial", legacy: "R$ 450 – R$ 1.500/mês", nexofab: "A partir de R$ 20/mês" },
 ];
 
 const plans: Array<{
@@ -156,14 +180,185 @@ const plans: Array<{
 const included = [
   "7 dias grátis completos sem cadastrar cartão",
   "Até 10 usuários ativos por empresa com papéis por setor",
-  "Comercial, Precificação, Plano de Corte, Produção, Estoque e Financeiro",
-  "Proposta online, aprovação de arte e recibo digital com sua marca",
-  "Isolamento total multiempresa (RLS) e backups gerenciados",
-  "Pagamento seguro via PIX, boleto bancário ou cartão (Asaas)",
+  "Kanban PCP, Modo TV, QR Code na OS e Etiquetas Térmicas/A4",
+  "Encaixe visual de chapa/bobina, DXF/SVG e precificação real",
+  "Proposta online ('Vista Xx'), portal /p/slug, arte e recibo com sua marca",
+  "Gráficos executivos, DRE, Ficha 360º e pagamento via PIX, boleto ou cartão",
 ];
 
 function revealDelay(ms: number): CSSProperties {
   return { "--delay": `${ms}ms` } as CSSProperties;
+}
+
+function renderStageVisual(tabId: PreviewTabId) {
+  if (tabId === "comercial") {
+    return (
+      <div className="nf-mini-kanban">
+        <div className="nf-mini-col">
+          <header><b>Novos</b><span>R$ 11.400</span></header>
+          <article>
+            <small>#1051 · Portal /p</small>
+            <b>Totem ACM 2,40m</b>
+            <em>R$ 6.800</em>
+          </article>
+          <article>
+            <small>#1052 · WhatsApp</small>
+            <b>Envelopamento Van</b>
+            <em>R$ 4.600</em>
+          </article>
+        </div>
+        <div className="nf-mini-col accent-amber">
+          <header><b>Aguardando</b><span>R$ 18.900</span></header>
+          <article>
+            <div className="nf-mini-badges">
+              <small>#1045</small>
+              <span className="nf-mini-eye"><Eye />Vista 3x</span>
+            </div>
+            <b>24 placas acrílico 6mm</b>
+            <em>R$ 7.200</em>
+          </article>
+          <article>
+            <small>#1047 · Retorno hoje</small>
+            <b>Fachada loja centro</b>
+            <em>R$ 11.700</em>
+          </article>
+        </div>
+        <div className="nf-mini-col accent-lime">
+          <header><b>Aprovados</b><span>R$ 14.200</span></header>
+          <article className="highlight">
+            <div className="nf-mini-badges">
+              <small>#1042</small>
+              <span className="nf-mini-ok">Aprovada 1-clique</span>
+            </div>
+            <b>Letra Caixa LED + ACM</b>
+            <em>R$ 14.200</em>
+          </article>
+        </div>
+      </div>
+    );
+  }
+
+  if (tabId === "precificacao") {
+    return (
+      <div className="nf-mini-nesting">
+        <div className="nf-mini-nesting-head">
+          <span><b>Chapa ACM 3mm</b> · 122 × 500 cm</span>
+          <em>12 peças encaixadas · 87,4% útil</em>
+        </div>
+        <svg viewBox="0 0 500 132" className="nf-mini-nesting-svg" role="img" aria-label="Exemplo visual de encaixe de peças em chapa ACM">
+          <rect x="2" y="2" width="496" height="128" rx="6" fill="#0b1f2c" stroke="#2c5364" strokeWidth="1.5" />
+          <rect x="8" y="8" width="484" height="116" fill="none" stroke="#e69e60" strokeDasharray="5 4" strokeWidth="1" opacity="0.7" />
+          {[0, 1, 2, 3, 4].map((col) => (
+            <g key={`r1-${col}`}>
+              <rect x={14 + col * 74} y={14} width={68} height={48} rx="3" fill="#0e8b81" fillOpacity="0.32" stroke="#2dd4bf" strokeWidth="1.2" />
+              <text x={48 + col * 74} y={42} textAnchor="middle" fill="#ccfbf1" fontSize="9.5" fontWeight="700">60×40</text>
+            </g>
+          ))}
+          {[0, 1, 2, 3, 4].map((col) => (
+            <g key={`r2-${col}`}>
+              <rect x={14 + col * 74} y={68} width={68} height={48} rx="3" fill="#0e8b81" fillOpacity="0.32" stroke="#2dd4bf" strokeWidth="1.2" />
+              <text x={48 + col * 74} y={96} textAnchor="middle" fill="#ccfbf1" fontSize="9.5" fontWeight="700">60×40</text>
+            </g>
+          ))}
+          <rect x="384" y="14" width="46" height="102" rx="3" fill="#c6f054" fillOpacity="0.22" stroke="#c6f054" strokeWidth="1.2" />
+          <text x="407" y="69" textAnchor="middle" fill="#ecfccb" fontSize="9" fontWeight="800">40×95 ↻</text>
+          <rect x="436" y="14" width="46" height="102" rx="3" fill="#c6f054" fillOpacity="0.22" stroke="#c6f054" strokeWidth="1.2" />
+          <text x="459" y="69" textAnchor="middle" fill="#ecfccb" fontSize="9" fontWeight="800">40×95 ↻</text>
+        </svg>
+        <div className="nf-mini-nesting-foot">
+          <span>Chapa ou Bobina (sem precisar de DXF)</span>
+          <span>DXF / SVG para Laser &amp; Router</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (tabId === "producao") {
+    return (
+      <div className="nf-mini-kanban">
+        <div className="nf-mini-col">
+          <header><b>Arte / Prova</b><span>3 OS</span></header>
+          <article>
+            <small>OS-325 · Arte v2</small>
+            <b>Plotagem frota 2 vans</b>
+            <span className="nf-mini-pill amber">Aguardando cliente</span>
+          </article>
+        </div>
+        <div className="nf-mini-col accent-teal">
+          <header><b>Em Produção</b><span>5 OS</span></header>
+          <article className="highlight">
+            <div className="nf-mini-badges">
+              <small>OS-318 · URGENTE</small>
+              <span className="nf-mini-eye"><QrCode />QR ativo</span>
+            </div>
+            <b>Totem luminoso recepção</b>
+            <span className="nf-mini-pill ok">Estoque reservado</span>
+          </article>
+        </div>
+        <div className="nf-mini-col accent-lime">
+          <header><b>Expedição</b><span>4 OS</span></header>
+          <article>
+            <div className="nf-mini-badges">
+              <small>OS-312 · VOL 1/3</small>
+              <span className="nf-mini-ok"><Tag />Etiqueta</span>
+            </div>
+            <b>Painel MDF fresado</b>
+            <span className="nf-mini-pill lime"><Tv />No Modo TV</span>
+          </article>
+        </div>
+      </div>
+    );
+  }
+
+  const bars = [
+    { m: "Jun", rev: 56, exp: 34 },
+    { m: "Jul", rev: 68, exp: 42 },
+    { m: "Ago", rev: 62, exp: 38 },
+    { m: "Set", rev: 79, exp: 46 },
+    { m: "Out", rev: 86, exp: 49 },
+    { m: "Nov", rev: 96, exp: 52 },
+  ];
+
+  return (
+    <div className="nf-mini-chart">
+      <div className="nf-mini-nesting-head">
+        <span><b>Evolução 6 meses</b> · Entradas × Saídas × Saldo</span>
+        <em>Margem líquida 36,1%</em>
+      </div>
+      <svg viewBox="0 0 480 142" className="nf-mini-chart-svg" role="img" aria-label="Gráfico executivo de faturamento e despesas">
+        {[24, 62, 100].map((y) => (
+          <line key={y} x1="16" x2="466" y1={y} y2={y} stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+        ))}
+        {bars.map((b, i) => {
+          const x = 32 + i * 74;
+          return (
+            <g key={b.m}>
+              <rect x={x} y={118 - b.rev} width="20" height={b.rev} rx="4" fill="#14b8a6" />
+              <rect x={x + 24} y={118 - b.exp} width="20" height={b.exp} rx="4" fill="#e26d54" opacity="0.88" />
+              <text x={x + 22} y="135" textAnchor="middle" fill="#90a8b4" fontSize="10.5" fontWeight="700">{b.m}</text>
+            </g>
+          );
+        })}
+        <path
+          d="M 54 90 L 128 84 L 202 88 L 276 74 L 350 68 L 424 58"
+          fill="none"
+          stroke="#c6f054"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+        />
+        {[
+          [54, 90],
+          [128, 84],
+          [202, 88],
+          [276, 74],
+          [350, 68],
+          [424, 58],
+        ].map(([cx, cy], idx) => (
+          <circle key={idx} cx={cx} cy={cy} r="4" fill="#c6f054" stroke="#081927" strokeWidth="2" />
+        ))}
+      </svg>
+    </div>
+  );
 }
 
 export function LandingExperience() {
@@ -234,7 +429,7 @@ export function LandingExperience() {
           <div className="nf-nav-links">
             <a href="#produto">Sistema</a>
             <a href="#modulos">Módulos</a>
-            <a href="#como-funciona">Como funciona</a>
+            <a href="#comparativo">Comparativo</a>
             <a href="#planos">Planos</a>
             <a href="#duvidas">Dúvidas</a>
           </div>
@@ -255,14 +450,14 @@ export function LandingExperience() {
           <div className="nf-hero-head">
             <div className="nf-pill">
               <span className="nf-pill-dot" />
-              Plataforma SaaS para fabricação sob medida e comunicação visual
+              ERP &amp; PCP moderno para comunicação visual, gráficas e fabricação sob medida
             </div>
             <h1>
-              O sistema completo do <em>orçamento ao caixa.</em>
+              Poder de ERP gigante, <em>preço justo e uso em 3 minutos.</em>
             </h1>
             <p className="nf-hero-copy">
-              Unifique propostas online, precificação técnica, plano de corte, ordens de produção, aprovação de arte,
-              estoque e financeiro em uma plataforma rápida, moderna e isolada por empresa.
+              Funil Kanban, precificação real por m²/chapa/bobina, encaixe visual, Kanban PCP com Modo TV e QR Code na
+              OS, etiquetas de expedição, aprovação de arte e financeiro completo — tudo no mesmo lugar.
             </p>
             <div className="nf-hero-actions">
               <Link href="/cadastro" className="nf-btn-primary nf-btn-lg">
@@ -270,13 +465,13 @@ export function LandingExperience() {
                 <ArrowRight className="size-4" />
               </Link>
               <a href="#planos" className="nf-btn-secondary nf-btn-lg">
-                Ver planos a partir de R$ 20/mês
+                Planos a partir de R$ 20/mês
               </a>
             </div>
             <div className="nf-hero-trust">
+              <span><Check /> Zero taxa de implantação</span>
               <span><Check /> Sem cartão no teste</span>
               <span><Check /> Até 10 usuários inclusos</span>
-              <span><Check /> PIX, boleto ou cartão</span>
             </div>
           </div>
 
@@ -289,7 +484,7 @@ export function LandingExperience() {
                 <span className="nf-stage-url">nexofab.vercel.app/gestao</span>
                 <span className="nf-stage-badge">
                   <ShieldCheck className="size-3.5" />
-                  Multiempresa · Isolado
+                  Multiempresa · Isolado RLS
                 </span>
               </div>
 
@@ -323,17 +518,7 @@ export function LandingExperience() {
                       </div>
                     ))}
                   </div>
-                  <div className="nf-stage-list">
-                    {currentTab.rows.map((row) => (
-                      <div key={row.title} className="nf-stage-row">
-                        <div>
-                          <b>{row.title}</b>
-                          <small>{row.subtitle}</small>
-                        </div>
-                        <span className={`nf-tag ${row.tone}`}>{row.tag}</span>
-                      </div>
-                    ))}
-                  </div>
+                  {renderStageVisual(currentTab.id)}
                 </div>
 
                 <aside className="nf-stage-aside">
@@ -374,124 +559,181 @@ export function LandingExperience() {
             <p className="nf-kicker">Tudo conectado de verdade</p>
             <h2>Cada setor da sua fábrica falando a mesma língua.</h2>
             <p>
-              Construído para substituir planilhas espalhadas, retrabalho no WhatsApp e controles paralelos que fazem
-              sua margem desaparecer no fim do mês.
+              Construído para substituir planilhas espalhadas, esquecimentos no WhatsApp e ERPs caros demais — do
+              primeiro orçamento até a etiqueta na caixa entregue.
             </p>
           </div>
 
           <div className="nf-bento">
             <article className="nf-bento-card wide" data-reveal="pending" style={revealDelay(40)}>
-              <div className="nf-icon-box"><ClipboardList className="size-5" /></div>
-              <h3>Orçamentos com proposta online e aprovação em 1 clique</h3>
+              <div className="nf-icon-box"><Columns3 className="size-5" /></div>
+              <h3>Funil Kanban, Proposta Online e Portal /p/sua-empresa</h3>
               <p>
-                Monte composições detalhadas com sua identidade visual, ofereça alternativas no mesmo link e deixe o
-                cliente aprovar direto pelo celular. Ao aprovar, o sistema registra a versão fechada e já envia o pedido
-                para a fila de produção.
+                Arraste propostas pelo funil comercial com soma em R$ por coluna, envie alternativas no mesmo link com a
+                sua marca e saiba na hora quando o cliente abriu a proposta. Publique seu próprio portal de pedidos para
+                receber solicitações direto no sino.
               </p>
               <div className="nf-mini-chips">
-                <span>Link público com sua logo</span>
-                <span>Grupos de alternativas</span>
-                <span>Revisões versionadas</span>
+                <span>Funil Kanban Drag &amp; Drop</span>
+                <span>Rastreio &ldquo;Vista Xx&rdquo;</span>
+                <span>Portal /p/sua-empresa</span>
                 <span>Venda rápida de balcão</span>
               </div>
             </article>
 
             <article className="nf-bento-card medium" data-reveal="pending" style={revealDelay(110)}>
               <div className="nf-icon-box teal"><Scissors className="size-5" /></div>
-              <h3>Precificação técnica & plano de corte</h3>
+              <h3>Encaixe Visual de Chapa/Bobina &amp; DXF/SVG</h3>
               <p>
-                Calcule chapas, m², perdas, insumos, máquinas e custos fixos com precisão. Envie o plano de corte direto
-                para o orçamento sem redigitar nada.
+                Simule cortes retangulares em chapas (ACM, MDF, Acrílico, PVC) ou bobinas (vinil/lona) sem precisar de
+                vetor, ou importe DXF/SVG para Laser e Router CNC com envio direto ao orçamento.
               </p>
               <div className="nf-mini-chips">
-                <span>Chapas & m²</span>
-                <span>Custo hora/máquina</span>
-                <span>Margem real</span>
+                <span>Chapa &amp; Bobina visual</span>
+                <span>DXF / SVG</span>
+                <span>Hora-máquina &amp; perdas</span>
               </div>
             </article>
 
             <article className="nf-bento-card" data-reveal="pending" style={revealDelay(60)}>
               <div className="nf-icon-box teal"><Factory className="size-5" /></div>
-              <h3>Produção & prova de arte</h3>
+              <h3>Kanban PCP, Modo TV &amp; QR Code na OS</h3>
               <p>
-                Controle cada etapa da OS, envie provas de arte por link para o cliente aprovar ou pedir ajustes e
-                registre custos reais de execução.
+                Quadro visual de 8 etapas com semáforo de prazo, tela cheia para TV na oficina, QR Code na OS para
+                avançar etapa em 1 toque no celular, aprovação de arte online e etiquetas de volume (térmica ou A4).
               </p>
               <div className="nf-mini-chips">
-                <span>Kanban / etapas</span>
-                <span>Arte por versão</span>
+                <span>Modo TV Chão de Fábrica</span>
+                <span>QR Code + Etiquetas</span>
               </div>
             </article>
 
             <article className="nf-bento-card" data-reveal="pending" style={revealDelay(130)}>
-              <div className="nf-icon-box"><Boxes className="size-5" /></div>
-              <h3>Estoque com reserva automática</h3>
+              <div className="nf-icon-box"><BellRing className="size-5" /></div>
+              <h3>Central de Atendimentos &amp; Ficha 360º</h3>
               <p>
-                Reserve chapas e insumos assim que a OS entra na fila, visualize alertas de saldo insuficiente e dê baixa
-                rastreável na conclusão.
+                Nunca mais esqueça um cliente sem resposta na correria: alertas no sino e na tela do PC para orçamentos
+                parados e retornos agendados, mais Ficha 360º com histórico financeiro e comercial completo.
               </p>
               <div className="nf-mini-chips">
-                <span>Reserva por OS</span>
-                <span>Movimentações</span>
+                <span>Alertas na tela do PC</span>
+                <span>Ficha 360º do cliente</span>
               </div>
             </article>
 
             <article className="nf-bento-card" data-reveal="pending" style={revealDelay(200)}>
               <div className="nf-icon-box teal"><CircleDollarSign className="size-5" /></div>
-              <h3>Financeiro, DRE & recibo digital</h3>
+              <h3>Gráficos Executivos, DRE &amp; Caixa</h3>
               <p>
-                Contas a pagar e receber parceladas, fornecedores, ponto de equilíbrio, fluxo projetado e recibo digital
-                público pronto para WhatsApp.
+                Faturamento × despesas × saldo dos últimos 6 meses, funil de conversão, ponto de equilíbrio ao vivo,
+                contas a pagar com leitor de boleto PDF, comissões e recibo digital para WhatsApp.
               </p>
               <div className="nf-mini-chips">
-                <span>Contas a pagar/receber</span>
-                <span>DRE & ponto de equilíbrio</span>
+                <span>Gráficos BI 6 meses</span>
+                <span>DRE &amp; ponto de equilíbrio</span>
               </div>
             </article>
 
             <article className="nf-bento-card half" data-reveal="pending" style={revealDelay(70)}>
-              <div className="nf-icon-box"><Users className="size-5" /></div>
-              <h3>Equipe organizada por função (até 10 usuários)</h3>
+              <div className="nf-icon-box"><Boxes className="size-5" /></div>
+              <h3>Estoque sincronizado com reserva automática por OS</h3>
               <p>
-                Convide comercial, produção, estoque e financeiro por link único de e-mail. Cada pessoa enxerga apenas
-                sua empresa ativa e seu escopo de trabalho.
+                Reserve chapas e insumos assim que o orçamento vira produção, visualize alertas de saldo insuficiente
+                direto no card do Kanban e dê baixa rastreável ao finalizar a ordem.
               </p>
               <div className="nf-mini-chips">
-                <span>Convites com expiração</span>
-                <span>Troca de empresa</span>
-                <span>Papéis granulares</span>
+                <span>Reserva por OS</span>
+                <span>Baixa na conclusão</span>
+                <span>Alertas de mínimo</span>
               </div>
             </article>
 
             <article className="nf-bento-card half" data-reveal="pending" style={revealDelay(140)}>
               <div className="nf-icon-box teal"><Lock className="size-5" /></div>
-              <h3>Arquitetura multiempresa com segurança real</h3>
+              <h3>Equipe por setor (até 10 usuários) &amp; segurança RLS</h3>
               <p>
-                Isolamento rigoroso por organização no banco de dados (Row Level Security), arquivos separados por empresa
-                e identidade própria em cada documento emitido.
+                Convide comercial, produção, estoque e financeiro com permissões granulares aplicadas diretamente no
+                banco de dados (Row Level Security) e isolamento total entre empresas.
               </p>
               <div className="nf-mini-chips">
+                <span><Users className="size-3 inline mr-1" />Até 10 usuários</span>
+                <span>Permissões por setor</span>
                 <span>Isolamento RLS</span>
-                <span>Storage por empresa</span>
-                <span>Auditoria</span>
               </div>
             </article>
           </div>
         </div>
       </section>
 
-      <section id="como-funciona" className="nf-section">
+      <section id="comparativo" className="nf-section">
+        <div className="nf-container">
+          <div className="nf-section-head center" data-reveal="pending">
+            <p className="nf-kicker">Comparativo real de mercado</p>
+            <h2>Recursos de ERP de R$ 600+/mês por uma fração do preço.</h2>
+            <p>
+              Sem taxa de implantação, sem contratos presos e sem cobrar por módulo separado.
+            </p>
+          </div>
+
+          <div className="nf-compare-card" data-reveal="pending" style={revealDelay(80)}>
+            <div className="nf-compare-scroll">
+              <table className="nf-compare-table">
+                <thead>
+                  <tr>
+                    <th>Recurso essencial da fábrica</th>
+                    <th>Planilhas &amp; WhatsApp</th>
+                    <th>ERPs tradicionais</th>
+                    <th className="nf-compare-highlight">NexoFab</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comparisonRows.map((row) => (
+                    <tr key={row.feature}>
+                      <td><b>{row.feature}</b></td>
+                      <td>
+                        {row.spreadsheets === "no" ? (
+                          <span className="nf-cmp-no"><X />Não tem</span>
+                        ) : (
+                          <span className="nf-cmp-partial"><Minus />Manual</span>
+                        )}
+                      </td>
+                      <td>
+                        {row.legacy === "yes" ? (
+                          <span className="nf-cmp-yes-muted"><Check />Sim</span>
+                        ) : row.legacy === "partial" ? (
+                          <span className="nf-cmp-partial"><Minus />Opcional / caro</span>
+                        ) : (
+                          <span className="nf-cmp-text">{row.legacy}</span>
+                        )}
+                      </td>
+                      <td className="nf-compare-highlight">
+                        {row.nexofab === "yes" ? (
+                          <span className="nf-cmp-yes"><Check />Incluso</span>
+                        ) : (
+                          <strong className="nf-cmp-best">{row.nexofab}</strong>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="como-funciona" className="nf-section" style={{ paddingTop: 20 }}>
         <div className="nf-container">
           <div className="nf-section-head center" data-reveal="pending">
             <p className="nf-kicker">Implantação imediata</p>
             <h2>Comece a operar em menos de 3 minutos.</h2>
-            <p>Sem instalação local, sem servidor próprio e sem reuniões intermináveis de setup.</p>
+            <p>Sem instalação local, sem servidor próprio e com opção de carregar dados de exemplo em 1 clique.</p>
           </div>
 
           <div className="nf-steps">
             {[
               ["01", "Crie sua conta grátis", "Cadastre seu nome, e-mail e senha. Não pedimos cartão de crédito para iniciar."],
-              ["02", "Personalize sua empresa", "Suba sua logo e dados fiscais. Os 7 dias grátis completos são liberados na hora."],
+              ["02", "Personalize sua empresa", "Suba sua logo, ative seu portal /p/sua-empresa e ganhe 7 dias grátis completos."],
               ["03", "Convide sua equipe", "Adicione até 10 pessoas definindo quem cuida de vendas, produção, estoque ou caixa."],
               ["04", "Escolha seu ciclo", "Quando aprovar o sistema, ative o plano mensal, trimestral ou anual via PIX, boleto ou cartão."],
             ].map(([num, title, desc], idx) => (
@@ -614,6 +856,10 @@ export function LandingExperience() {
               <p>O Plano Completo inclui até 10 usuários ativos por empresa, com papéis separados para administrador, comercial, produção, estoque e financeiro.</p>
             </details>
             <details>
+              <summary>Funciona no celular na oficina e em TV no chão de fábrica?</summary>
+              <p>Sim. A OS imprime um QR Code que abre a ordem direto no celular do operador com avanço de etapa em 1 toque, e a aba Produção conta com Modo TV em tela cheia com atualização automática a cada 30 segundos.</p>
+            </details>
+            <details>
               <summary>Consigo pagar por PIX ou boleto além de cartão?</summary>
               <p>Sim. A cobrança é processada pelo Asaas com opção de PIX, boleto bancário ou cartão de crédito nos ciclos mensal, trimestral ou anual.</p>
             </details>
@@ -656,6 +902,7 @@ export function LandingExperience() {
           <div className="nf-footer-links">
             <a href="#produto">Sistema</a>
             <a href="#modulos">Módulos</a>
+            <a href="#comparativo">Comparativo</a>
             <a href="#planos">Planos</a>
             <Link href="/termos">Termos</Link>
             <Link href="/privacidade">Privacidade</Link>
