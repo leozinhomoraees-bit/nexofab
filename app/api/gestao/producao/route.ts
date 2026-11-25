@@ -188,6 +188,27 @@ export async function GET(request: Request) {
     const grouped = (artworkApprovals ?? []).reduce((map, item) => { const current = map.get(item.production_order_id) ?? []; current.push(item); map.set(item.production_order_id, current); return map; }, new Map<string, NonNullable<typeof artworkApprovals>>());
     for (const row of rows) row.production_artwork_approvals = grouped.get(String(row.id)) ?? [];
   }
+  const quoteIdsForPhotos = [...new Set(rows.map((row) => (typeof row.quote_id === "string" ? row.quote_id : "")).filter(Boolean))];
+  if (quoteIdsForPhotos.length) {
+    const { data: quoteAttachments, error: attachmentsError } = await access.supabase
+      .from("quote_attachments")
+      .select("id, quote_id, caption, file_url, content_type, show_on_proposal, sort_order, created_at")
+      .in("quote_id", quoteIdsForPhotos)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+    if (!attachmentsError && quoteAttachments) {
+      const groupedPhotos = quoteAttachments.reduce((map, item) => {
+        const current = map.get(item.quote_id) ?? [];
+        current.push(item);
+        map.set(item.quote_id, current);
+        return map;
+      }, new Map<string, typeof quoteAttachments>());
+      for (const row of rows) {
+        const qId = typeof row.quote_id === "string" ? row.quote_id : "";
+        row.quote_attachments = qId ? groupedPhotos.get(qId) ?? [] : [];
+      }
+    }
+  }
   const [{ data: members }, { data: profiles }] = await Promise.all([
     access.supabase
       .from("organization_members")

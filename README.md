@@ -14,7 +14,7 @@ SaaS multiempresa para orçamentos, precificação técnica, plano de corte, pro
 
 1. Crie um projeto Supabase exclusivo e vazio para o NexoFab (ative **Enable Data API** e **Enable RLS on new tables automatically**; mantenha **Grant API access to new tables automatically** desmarcado).
 2. Copie `.env.example` para `.env.local` e informe apenas a URL e a Publishable/anon key do projeto novo, além das variáveis server-side do Asaas Sandbox (`ASAAS_ENVIRONMENT=sandbox`, `ASAAS_API_KEY`, `ASAAS_WEBHOOK_TOKEN`).
-3. Aplique todas as 49 migrations em `supabase/migrations/`, em ordem cronológica.
+3. Aplique todas as 50 migrations em `supabase/migrations/`, em ordem cronológica.
 4. Registre no banco o hash SHA-256 do `ASAAS_WEBHOOK_TOKEN` na tabela privada `private.webhook_secrets`:
    ```sql
    insert into private.webhook_secrets (provider, token_hash)
