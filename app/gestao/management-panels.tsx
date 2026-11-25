@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { whatsappUrl } from "@/lib/whatsapp";
 import { useToast } from "./toast-context";
+import { CashflowBarLineChart, CommercialFunnelChart, type CashSeriesPoint, type CommercialFunnelData } from "./executive-charts";
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const showDate = (value?: string | null) => value ? new Date(value).toLocaleDateString("pt-BR") : "—";
@@ -38,6 +39,8 @@ type Dashboard = {
   revenue: number; openQuotes: number; openQuoteValue: number; approvedQuotes: number; approvedPendingProduction: number; unpaidClosedQuotes: number; unpaidClosedValue: number; overdueReceivableQuotes: number; overdueReceivableValue: number; followUpQuotesDue: number; expiringQuotes: number; productionOrders: number; overdueProduction: number; criticalStock: number; customerCount: number;
   recentQuotes: Array<{ id: string; number: number; customerName: string; service: string; status: string; value: number; createdAt: string; validUntil?: string | null }>;
   productionByStage: Array<{ stage: string; count: number }>;
+  monthlyCashflow?: CashSeriesPoint[];
+  commercialFunnel?: CommercialFunnelData;
   criticalItems: Array<{ id: string; name: string; unit: string; current: number; minimum: number }>;
   breakEven: { configured: boolean; grossRevenue: number; fixedCosts: number; variableCosts: number; contribution: number; accounting: number; financial: number; economic: number; remaining: number; progress: number; contributionRate: number; dailyTarget: number; calculationBasis: "realized" | "projected" | "incomplete"; historicalMonths: number; recurringSource: "current" | "previous" | "pricing" | "empty"; recurringSourceMonth: string | null };
 };
@@ -137,6 +140,42 @@ export function OverviewPanel({ onNavigate }: { onNavigate: (section: string) =>
       <button onClick={() => onNavigate("orcamentos")}><span className="overview-kpi-icon"><TrendingUp/></span><small>Carteira em aberto</small><b>{currency.format(data.openQuoteValue)}</b><em>{data.openQuotes} proposta(s) · {data.approvedQuotes} aprovada(s)</em><ArrowRight/></button>
       <button className={data.overdueProduction ? "attention" : ""} onClick={() => onNavigate("producao")}><span className="overview-kpi-icon"><Factory/></span><small>Produção ativa</small><b>{data.productionOrders} <i>ordens</i></b><em>{data.overdueProduction ? `${data.overdueProduction} prazo(s) vencido(s)` : "Nenhum prazo vencido"}</em><ArrowRight/></button>
       <button className={data.criticalStock ? "attention" : ""} onClick={() => onNavigate("estoque")}><span className="overview-kpi-icon"><Boxes/></span><small>Estoque crítico</small><b>{data.criticalStock} <i>itens</i></b><em>{data.criticalStock ? "Reposição requer atenção" : "Estoque sem alertas"}</em><ArrowRight/></button>
+    </section>
+
+    <section className={`overview-charts-grid ${canViewFinance ? "" : "single"}`}>
+      {canViewFinance && (
+        <article className="overview-card">
+          <header>
+            <div><small>RESULTADO REALIZADO · 6 MESES</small><h2>Faturamento × Despesas × Saldo</h2></div>
+            <button onClick={() => onNavigate("relatorios")}>Ver relatórios <ArrowRight/></button>
+          </header>
+          <div className="exec-chart-card-body">
+            <CashflowBarLineChart data={data.monthlyCashflow ?? []} />
+          </div>
+        </article>
+      )}
+      <article className="overview-card">
+        <header>
+          <div><small>DESEMPENHO COMERCIAL</small><h2>Funil de conversão e ticket médio</h2></div>
+          <button onClick={() => onNavigate("orcamentos")}>Abrir funil <ArrowRight/></button>
+        </header>
+        <div className="exec-chart-card-body">
+          <CommercialFunnelChart
+            data={data.commercialFunnel ?? {
+              totalCount: 0,
+              totalValue: 0,
+              negotiatingCount: 0,
+              negotiatingValue: 0,
+              approvedCount: 0,
+              approvedValue: 0,
+              convertedCount: 0,
+              convertedValue: 0,
+              conversionRate: 0,
+              averageTicket: 0,
+            }}
+          />
+        </div>
+      </article>
     </section>
 
     <section className="overview-main-grid">

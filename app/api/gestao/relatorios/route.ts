@@ -96,6 +96,33 @@ export async function GET(request: Request) {
   let accumulated = revenue - expenseTotal;
   const cashForecast = [...forecastMap.values()].sort((a, b) => a.date.localeCompare(b.date)).map((item) => { accumulated += item.receivable - item.payable; return { ...item, balance: item.receivable - item.payable, accumulated }; });
 
+  // Série temporal para gráficos (agrupa por mês se > 45 dias, senão por dia)
+  const groupByMonth = duration > 45;
+  const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  const seriesMap = new Map<string, { key: string; label: string; revenue: number; expenses: number }>();
+  const ensureBucket = (rawDate: string) => {
+    const key = groupByMonth ? rawDate.slice(0, 7) : rawDate.slice(0, 10);
+    const existing = seriesMap.get(key);
+    if (existing) return existing;
+    const label = groupByMonth
+      ? `${monthNames[Number(key.slice(5, 7)) - 1] ?? key.slice(5, 7)}/${key.slice(2, 4)}`
+      : `${key.slice(8, 10)}/${key.slice(5, 7)}`;
+    const bucket = { key, label, revenue: 0, expenses: 0 };
+    seriesMap.set(key, bucket);
+    return bucket;
+  };
+  for (const item of paymentRows) {
+    if (!item.received_on) continue;
+    ensureBucket(item.received_on).revenue += Number(item.amount ?? 0);
+  }
+  for (const item of expenseRows) {
+    if (!item.date) continue;
+    ensureBucket(item.date).expenses += item.amount;
+  }
+  const cashSeries = [...seriesMap.values()]
+    .sort((a, b) => a.key.localeCompare(b.key))
+    .map((item) => ({ month: item.key, label: item.label, revenue: item.revenue, expenses: item.expenses, profit: item.revenue - item.expenses }));
+
   return Response.json({ report: {
     period: { from, to, previousFrom, previousTo },
     summary: {
@@ -111,6 +138,7 @@ export async function GET(request: Request) {
     },
     comparison: { revenue: previousRevenue, expenses: previousExpense, cashResult: previousRevenue - previousExpense, quoteCount: (previousQuotes.data ?? []).length, quoteValue: previousQuoteValue },
     dre: { grossRevenue: revenue, variableExpenses, contributionMargin: revenue - variableExpenses, fixedExpenses, operatingResult: revenue - variableExpenses - fixedExpenses },
+    cashSeries,
     cashForecast,
     expensesByCategory: group(expenseRows, (item) => item.category, (item) => item.amount),
     expensesBySupplier: group(expenseRows, (item) => item.supplier, (item) => item.amount).slice(0, 10),

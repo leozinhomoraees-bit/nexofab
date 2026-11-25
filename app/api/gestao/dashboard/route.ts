@@ -18,6 +18,9 @@ export async function GET() {
   const historyStartDate = new Date(`${monthStart}T12:00:00`);
   historyStartDate.setMonth(historyStartDate.getMonth() - 3);
   const historyStart = `${historyStartDate.getFullYear()}-${String(historyStartDate.getMonth() + 1).padStart(2, "0")}-01`;
+  const chartStartDate = new Date(`${monthStart}T12:00:00`);
+  chartStartDate.setMonth(chartStartDate.getMonth() - 5);
+  const chartStart = `${chartStartDate.getFullYear()}-${String(chartStartDate.getMonth() + 1).padStart(2, "0")}-01`;
   const canViewFinance = ["admin", "financeiro"].includes(access.role);
   const canViewReceivables = ["admin", "financeiro", "comercial"].includes(access.role);
   const emptyList = Promise.resolve({ data: [] as never[], error: null });
@@ -26,7 +29,7 @@ export async function GET() {
   const canManageDemo = access.role === "admin";
   const [payments, quotes, production, inventory, customers, financialMonth, paidPayables, openReceivables, previousFinancialMonth, pricingFixedCosts, historicalFinancialMonths, historicalPayments, historicalPayables, organizationRow, pricingSettingsRow, demoCustomerRow] = await Promise.all([
     canViewFinance ? access.supabase.from("quote_payments").select("amount").gte("received_on", monthStart).lt("received_on", monthEnd) : emptyList,
-    access.supabase.from("quotes").select("id, number, customer_name, service, status, estimated_value, valid_until, created_at, updated_at").order("created_at", { ascending: false }).limit(100),
+    access.supabase.from("quotes").select("id, number, customer_name, service, status, estimated_value, valid_until, created_at, updated_at").order("created_at", { ascending: false }).limit(200),
     access.supabase.from("production_orders").select("id, number, title, stage, priority, due_at, created_at").not("stage", "in", "(concluido,cancelado)").order("created_at", { ascending: false }).limit(100),
     access.supabase.from("inventory_items").select("id, name, unit, current_quantity, minimum_quantity").eq("active", true),
     access.supabase.from("customers").select("id", { count: "exact", head: true }).eq("active", true),
@@ -36,8 +39,8 @@ export async function GET() {
     canViewFinance ? access.supabase.from("financial_months").select("competence_month, fixed_costs, non_cash_costs, desired_profit, business_days").lt("competence_month", monthStart).order("competence_month", { ascending: false }).limit(1).maybeSingle() : emptySingle,
     canViewFinance ? access.supabase.from("pricing_fixed_costs").select("monthly_amount").eq("active", true) : emptyList,
     canViewFinance ? access.supabase.from("financial_months").select("competence_month, gross_revenue, variable_costs").gte("competence_month", historyStart).lt("competence_month", monthStart) : emptyList,
-    canViewFinance ? access.supabase.from("quote_payments").select("amount, received_on").gte("received_on", historyStart).lt("received_on", monthStart) : emptyList,
-    canViewFinance ? access.supabase.from("payable_installments").select("amount, paid_amount, interest_amount, fine_amount, discount_amount, paid_on, payables(expense_categories(classification))").eq("status", "pago").gte("paid_on", historyStart).lt("paid_on", monthStart) : emptyList,
+    canViewFinance ? access.supabase.from("quote_payments").select("amount, received_on").gte("received_on", chartStart).lt("received_on", monthEnd) : emptyList,
+    canViewFinance ? access.supabase.from("payable_installments").select("amount, paid_amount, interest_amount, fine_amount, discount_amount, paid_on, payables(expense_categories(classification))").eq("status", "pago").gte("paid_on", chartStart).lt("paid_on", monthEnd) : emptyList,
     access.supabase.from("organizations").select("logo_url, whatsapp, document, public_slug, public_portal_enabled").eq("id", access.organizationId).maybeSingle(),
     access.supabase.from("pricing_settings").select("id").eq("id", "default").maybeSingle(),
     canManageDemo ? access.supabase.from("customers").select("id").ilike("name", "%[Exemplo]%").limit(1) : emptyList,
@@ -86,15 +89,57 @@ export async function GET() {
   const historicVariableCosts = (historicalPayables.data ?? []).flatMap((item) => {
     const payable = Array.isArray(item.payables) ? item.payables[0] : item.payables;
     const category = Array.isArray(payable?.expense_categories) ? payable.expense_categories[0] : payable?.expense_categories;
-    return ["variavel", "imposto", "financeiro"].includes(category?.classification ?? "") && item.paid_on
+    return ["variavel", "imposto", "financeiro"].includes(category?.classification ?? "") && item.paid_on && item.paid_on >= historyStart && item.paid_on < monthStart
       ? [{ date: item.paid_on, amount: effectivePaidAmount(item) }]
       : [];
   });
   const historicalProjection = historicalContributionProjection(
     (historicalFinancialMonths.data ?? []).map((item) => ({ competenceMonth: item.competence_month, otherRevenue: Number(item.gross_revenue), otherVariableCosts: Number(item.variable_costs) })),
-    (historicalPayments.data ?? []).map((item) => ({ date: item.received_on, amount: Number(item.amount) })),
+    (historicalPayments.data ?? []).filter((item) => item.received_on >= historyStart && item.received_on < monthStart).map((item) => ({ date: item.received_on, amount: Number(item.amount) })),
     historicVariableCosts,
   );
+
+  // Série mensal dos últimos 6 meses (Entradas x Despesas x Saldo)
+  const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  const monthlyCashflow = canViewFinance
+    ? Array.from({ length: 6 }, (_, index) => {
+        const d = new Date(`${chartStart}T12:00:00`);
+        d.setMonth(d.getMonth() + index);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        const rev = (historicalPayments.data ?? [])
+          .filter((item) => item.received_on?.startsWith(key))
+          .reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+        const exp = (historicalPayables.data ?? [])
+          .filter((item) => item.paid_on?.startsWith(key))
+          .reduce((sum, item) => sum + effectivePaidAmount(item), 0);
+        return {
+          month: key,
+          label: `${monthNames[d.getMonth()]}/${String(d.getFullYear()).slice(-2)}`,
+          revenue: rev,
+          expenses: exp,
+          profit: rev - exp,
+        };
+      })
+    : [];
+
+  // Funil comercial consolidado
+  const convertedQuotes = quoteRows.filter((quote) => quote.status === "convertido");
+  const negotiatingQuotes = quoteRows.filter((quote) => ["em_analise", "aguardando_cliente"].includes(quote.status));
+  const approvedAndClosedQuotes = quoteRows.filter((quote) => ["aprovado", "convertido"].includes(quote.status));
+  const commercialFunnel = {
+    totalCount: quoteRows.length,
+    totalValue: quoteRows.reduce((sum, q) => sum + Number(q.estimated_value ?? 0), 0),
+    negotiatingCount: negotiatingQuotes.length,
+    negotiatingValue: negotiatingQuotes.reduce((sum, q) => sum + Number(q.estimated_value ?? 0), 0),
+    approvedCount: approvedAndClosedQuotes.length,
+    approvedValue: approvedAndClosedQuotes.reduce((sum, q) => sum + Number(q.estimated_value ?? 0), 0),
+    convertedCount: convertedQuotes.length,
+    convertedValue: convertedQuotes.reduce((sum, q) => sum + Number(q.estimated_value ?? 0), 0),
+    conversionRate: quoteRows.length ? (convertedQuotes.length / quoteRows.length) * 100 : 0,
+    averageTicket: convertedQuotes.length
+      ? convertedQuotes.reduce((sum, q) => sum + Number(q.estimated_value ?? 0), 0) / convertedQuotes.length
+      : 0,
+  };
   const finance = financialMonth.data;
   const previousFinance = previousFinancialMonth.data;
   const pricingFixedMonthly = (pricingFixedCosts.data ?? []).reduce((sum, item) => sum + Number(item.monthly_amount ?? 0), 0);
@@ -138,6 +183,8 @@ export async function GET() {
     customerCount: customers.count ?? 0,
     recentQuotes: quoteRows.slice(0, 5).map((quote) => ({ id: quote.id, number: quote.number, customerName: quote.customer_name, service: quote.service, status: quote.status, value: Number(quote.estimated_value ?? 0), createdAt: quote.created_at, validUntil: quote.valid_until })),
     productionByStage,
+    monthlyCashflow,
+    commercialFunnel,
     criticalItems: criticalItems.map((item) => ({ id: item.id, name: item.name, unit: item.unit, current: Number(item.current_quantity), minimum: Number(item.minimum_quantity) })),
     breakEven: {
       configured: Boolean(finance || recurringFixed.value > 0),
