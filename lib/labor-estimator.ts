@@ -16,6 +16,11 @@ export type LaborEstimateInput = {
   installationIncluded?: boolean;
   complexityFactor?: number;
   cutIncluded?: boolean;
+  removalHours?: number;
+  heightWorkType?: string;
+  cavaleteStructureMode?: string;
+  trophyBaseLayers?: number;
+  glassFilmType?: string;
 };
 
 export type LaborEstimate = { minutes: number; explanation: string; factors: string[] };
@@ -120,6 +125,39 @@ export function estimateLabor(input: LaborEstimateInput): LaborEstimate {
       minutes = 15 + quantity * 1.2;
       factors.push(`${quantity} medalha(s)`, "limpeza, montagem e conferência");
       break;
+    case "luminoso_backlight": {
+      const faces = Math.max(1, Math.min(2, positive(input.faces, 1)));
+      minutes = 60 + perimeter * 14 + area * 18 * faces + depthM * 35 + (input.painted ? 25 : 0) + 45;
+      factors.push(`${perimeter.toFixed(1)} m de caixa`, `${faces} face(s)`, "instalação dos módulos LED, fontes e teste elétrico");
+      if (input.painted) factors.push("pintura da estrutura");
+      break;
+    }
+    case "trofeu": {
+      const layers = Math.max(1, positive(input.trophyBaseLayers, 1));
+      minutes = 20 + quantity * (8 + (layers > 1 ? 3 : 0));
+      factors.push(`${quantity} troféu(s)`, layers > 1 ? `base em ${layers} camadas` : "base simples", "colagem, limpeza e conferência");
+      break;
+    }
+    case "cavalete": {
+      const fab = input.cavaleteStructureMode !== "pronto";
+      minutes = 25 + quantity * (fab ? 40 : 15) + area * 2 * 14;
+      factors.push(`${quantity} cavalete(s) dupla face`, fab ? "serralheria, pintura e dobradiças" : "montagem em cavalete pronto", "aplicação de adesivo nas 2 faces");
+      break;
+    }
+    case "wind_banner": {
+      const sides = Math.max(1, Math.min(2, positive(input.faces, 2)));
+      minutes = 12 + quantity * 10 + area * sides * 4;
+      factors.push(`${quantity} wind banner(s)`, sides === 2 ? "dupla face" : "face simples", "acabamento, conferência e montagem do kit");
+      break;
+    }
+    case "vitrine_vidro": {
+      const heightMult = input.heightWorkType === "andaime" ? 1.65 : input.heightWorkType === "escada" ? 1.3 : 1;
+      const basePerM2 = input.glassFilmType === "recorte" ? 32 : input.glassFilmType === "jateado" ? 28 : 22;
+      minutes = 20 + area * basePerM2 * heightMult + positive(input.removalHours) * 60;
+      factors.push(`${area.toFixed(2)} m² de vidro`, input.heightWorkType === "andaime" ? "trabalho em andaime" : input.heightWorkType === "escada" ? "trabalho em escada" : "aplicação térrea");
+      if (positive(input.removalHours) > 0) factors.push(`${positive(input.removalHours).toFixed(1)} h de remoção anterior`);
+      break;
+    }
     case "maquina_servico":
       minutes = 8 + quantity * 1.5;
       factors.push("recebimento, preparação e retirada do material", `${quantity} unidade(s)/chapa(s)`);

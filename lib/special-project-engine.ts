@@ -1,4 +1,4 @@
-export type SpecialProjectKind = "banner" | "faixa" | "lona_backdrop" | "adesivo_impresso" | "adesivo_impresso_recorte" | "adesivo_cor" | "gravacao_laser" | "estrutura_lona" | "placa_adesivada" | "placa_aplique" | "placa_acm_letra_caixa" | "caixa_expositor" | "envelopamento" | "impressao_rapida" | "letra_caixa" | "medalha" | "neon_led" | "impressao_3d" | "totem";
+export type SpecialProjectKind = "banner" | "faixa" | "lona_backdrop" | "adesivo_impresso" | "adesivo_impresso_recorte" | "adesivo_cor" | "gravacao_laser" | "estrutura_lona" | "placa_adesivada" | "placa_aplique" | "placa_acm_letra_caixa" | "caixa_expositor" | "envelopamento" | "impressao_rapida" | "letra_caixa" | "medalha" | "neon_led" | "impressao_3d" | "totem" | "luminoso_backlight" | "trofeu" | "cavalete" | "wind_banner" | "vitrine_vidro";
 
 export type ProjectApplique = {
   id?: string;
@@ -44,6 +44,11 @@ export type SpecialProjectInput = {
   dimensionBasis?: "externa" | "interna"; boxStyle?: "aberta" | "fechada" | "com_tampa"; lidType?: "solta" | "articulada" | "correr";
   jointType?: "sobreposta" | "entre_laterais"; verticalDividers?: number; shelves?: number; panelSpacingMm?: number; hardwareCost?: number;
   engravingItemType?: "copo_termico" | "caneca" | "garrafa" | "caneta" | "chaveiro" | "placa" | "outro"; customerSuppliesMaterial?: boolean; rotaryEngraving?: boolean;
+  luminosoType?: "lona_backlight" | "acrilico_leitoso" | "acm_vazado"; backPanelCost?: number;
+  baseWidthMm?: number; baseDepthMm?: number; trophyBaseLayers?: number; trophyPersonalization?: "gravacao" | "aplique" | "gravacao_aplique" | "uv_adesivo";
+  cavaleteStructureMode?: "fabricar" | "pronto"; structureMaterialId?: string;
+  windBannerSides?: number; windBannerBaseType?: "agua" | "ferro" | "estaca" | "sem_base";
+  glassFilmType?: "perfurado" | "jateado" | "impresso" | "recorte"; heightWorkType?: "terreo" | "escada" | "andaime"; travelCost?: number;
   appliques?: ProjectApplique[];
 };
 
@@ -231,7 +236,13 @@ function finish(input: SpecialProjectInput, settings: Settings, lines: Line[], b
 
 export function calculateSpecialProject(input: SpecialProjectInput, materials: Material[], machines: Machine[], settings: Settings): SpecialProjectResult {
   const selectedPrimary = materials.find((x) => x.id === input.primaryMaterialId);
-  const primary = selectedPrimary ?? (input.kind === "gravacao_laser" && input.customerSuppliesMaterial ? { id: "customer-supplied", name: "Material fornecido pelo cliente", category: "outro", format: "unidade", package_cost: 0, purchase_quantity: 1, default_waste_percent: 0 } : undefined);
+  const primary = selectedPrimary ?? (
+    input.kind === "gravacao_laser" && input.customerSuppliesMaterial
+      ? { id: "customer-supplied", name: "Material fornecido pelo cliente", category: "outro", format: "unidade", package_cost: 0, purchase_quantity: 1, default_waste_percent: 0 }
+      : input.kind === "wind_banner" && (n(input.finishingCost) > 0 || n(input.hardwareCost) > 0 || n(input.basePlateCost) > 0)
+        ? { id: "outsourced-wind-banner", name: "Bandeira / tecido terceirizado", category: "tecido", format: "unidade", package_cost: 0, purchase_quantity: 1, default_waste_percent: 0 }
+        : undefined
+  );
   if (!primary) throw new Error("Selecione o insumo principal.");
   const secondary = materials.find((x) => x.id === input.secondaryMaterialId);
   const tertiary = materials.find((x) => x.id === input.tertiaryMaterialId);
@@ -885,14 +896,264 @@ export function calculateSpecialProject(input: SpecialProjectInput, materials: M
     if (n(input.assemblyCostPerUnit)) lines.push({ key: "medal-assembly", label: "Montagem e acabamento", detail: `${q} unidade(s)`, amount: q * n(input.assemblyCostPerUnit) });
     materialUsage = `${q} medalha(s) · aproveitamento de ${nesting.capacity} por chapa${ribbonLength ? ` · ${round(ribbonLength, 2)} m de fita` : ""}${stickerLength ? ` · ${round(stickerLength, 2)} m de adesivo` : ""}`;
     Object.assign(metrics, { shape, quantity: q, thicknessMm: n(primary.thickness_mm), piecesPerSheet: nesting.capacity, sheetsToPrepare: nesting.sheets, equivalentSheetsCharged: round(equivalentSheets, 4), perimeterEachMm: round(perimeterEach, 2), totalCutM: round(perimeterEach * q / 1000, 3), cutMinutes: round(cutMinutes, 2), engravingAreaM2: round(engravingArea, 4), engravingMinutes: round(engravingMinutes, 2), ribbonLengthM: round(ribbonLength, 2), holeDiameterMm: n(input.holeDiameterMm) });
+  } else if (input.kind === "luminoso_backlight") {
+    if (!secondary) throw new Error("Selecione o material da face luminosa (lona backlight, acrílico leitoso ou ACM).");
+    const barLength = n(primary.length_m);
+    if (!barLength) throw new Error("Cadastre o comprimento da barra do perfil estrutural.");
+    const faces = Math.max(1, Math.min(2, Math.round(n(input.totemFaces || 1))));
+    const luminosoType = input.luminosoType || "lona_backlight";
+    const widthM = w / 1000, heightM = h / 1000, depthM = Math.max(n(input.depthMm), 80) / 1000;
+    const spacingM = Math.max(n(input.reinforcementSpacingMm), 300) / 1000;
+    const crossbars = Math.max(0, Math.ceil(widthM / spacingM) - 1);
+    const usedM = (2 * (widthM + heightM) * 2 + crossbars * heightM * 2 + 4 * depthM + crossbars * 2 * depthM) * q;
+    const bars = Math.ceil(usedM / barLength), barCost = bars * unitCost(primary);
+    lines.push({ key: "luminoso-frame", label: primary.name, detail: `${bars} barra(s) · ${round(usedM, 2)} m usados · caixa ${round(depthM * 1000, 0)} mm`, amount: barCost });
+    stock.push({ materialId: primary.id, materialName: primary.name, quantity: bars, unit: "un", source: "estrutura-luminoso" });
+
+    let faceCost = 0;
+    const waste = n(input.wastePercent || secondary.default_waste_percent);
+    if (secondary.format === "chapa") {
+      const layout = sheetOrPanels(secondary, w, h, q * faces, 0);
+      const sheetArea = n(secondary.width_mm) * n(secondary.height_mm) / 1e6;
+      const netFaceArea = w * h * q * faces / 1e6;
+      const chargeableArea = Math.min(layout.purchasedArea, netFaceArea * (1 + waste / 100));
+      const equivalentSheets = chargeableArea / Math.max(sheetArea, .000001);
+      faceCost = equivalentSheets * unitCost(secondary);
+      purchasedArea = chargeableArea; effectiveArea = netFaceArea; wasteArea = Math.max(0, chargeableArea - netFaceArea); rotated = layout.rotated;
+      lines.push({ key: "luminoso-face", label: secondary.name, detail: `${faces} face(s) · ${layout.sheets} chapa(s) física(s) · custo rateado em ${round(equivalentSheets, 4)} chapa`, amount: faceCost });
+      stock.push({ materialId: secondary.id, materialName: secondary.name, quantity: equivalentSheets, unit: "un equivalente", source: "face-luminoso" });
+    } else {
+      const allow = n(input.allowanceMm || 50) * 2;
+      const coating = roll(secondary, w, h, q * faces, waste, allow, allow, undefined, true);
+      faceCost = coating.cost; purchasedArea = coating.purchasedArea; effectiveArea = coating.productionArea; wasteArea = coating.wasteArea; rotated = coating.rotated;
+      lines.push({ key: "luminoso-face", label: secondary.name, detail: `${round(coating.length, 2)} m lineares · ${faces} face(s)`, amount: coating.cost });
+      stock.push({ materialId: secondary.id, materialName: secondary.name, quantity: coating.length, unit: "m", source: "face-luminoso" });
+    }
+
+    const modulesPerM2 = Math.max(n(input.ledModulesPerM2 || 60), 1);
+    const modules = Math.ceil(effectiveArea * modulesPerM2);
+    const totalWatts = modules * n(input.ledModuleWatts || 0.72);
+    const supplies = totalWatts > 0 ? Math.ceil(totalWatts / Math.max(n(input.powerSupplyWatts || 100), 1)) : 0;
+    let ledCost = 0;
+    if (tertiary) {
+      ledCost = modules * unitCost(tertiary);
+      lines.push({ key: "luminoso-led", label: tertiary.name, detail: `${modules} módulo(s) LED (${round(modulesPerM2, 0)}/m²) · ${round(totalWatts, 1)} W`, amount: ledCost });
+      stock.push({ materialId: tertiary.id, materialName: tertiary.name, quantity: modules, unit: "un", source: "iluminacao" });
+    } else {
+      metrics.ledPending = true;
+    }
+    if (supplies && n(input.powerSupplyUnitCost)) {
+      lines.push({ key: "luminoso-supplies", label: "Fontes 12V dimensionadas", detail: `${supplies} fonte(s) de ${n(input.powerSupplyWatts || 100)} W para ${round(totalWatts, 1)} W`, amount: supplies * n(input.powerSupplyUnitCost) });
+    }
+    if (n(input.wiringCost)) lines.push({ key: "luminoso-wiring", label: "Fiação, conectores e elétrica", detail: "Montagem elétrica interna", amount: n(input.wiringCost) });
+    if (n(input.backPanelCost)) lines.push({ key: "luminoso-back", label: "Fundo e fechamento lateral", detail: luminosoType === "acm_vazado" ? "Acrílico difusor + fechamento da caixa" : "Chapa galvanizada / perfil lateral", amount: n(input.backPanelCost) });
+    const weldM = (16 + crossbars * 6) * .04 * q;
+    if (n(input.weldingCostPerMeter)) lines.push({ key: "luminoso-weld", label: "Solda e consumíveis", detail: `${round(weldM, 2)} m estimados de cordão`, amount: weldM * n(input.weldingCostPerMeter) });
+    if (input.paintIncluded && n(input.paintCost)) lines.push({ key: "luminoso-paint", label: "Pintura / acabamento da caixa", detail: "Primer e pintura informados", amount: n(input.paintCost) });
+    if (n(input.finishingCost)) lines.push({ key: "luminoso-finishing", label: "Acabamento gráfico / vedação", detail: "Adesivo translúcido, borracha ou vedação", amount: n(input.finishingCost) });
+    materialCost = barCost + faceCost + ledCost;
+    calculatedWasteCost = purchasedArea ? faceCost * wasteArea / purchasedArea : 0;
+    varnishArea = secondary.category === "lona" ? effectiveArea : 0;
+    materialUsage = `${bars} barra(s) + ${faces} face(s) em ${secondary.name} + ${modules} LEDs (${supplies} fonte(s))`;
+    Object.assign(metrics, { luminosoType, faces, depthMm: round(depthM * 1000, 0), bars, ledModules: modules, totalWatts: round(totalWatts, 1), powerSupplies: supplies, painted: Boolean(input.paintIncluded), fixing: input.fixingType || "não informado" });
+  } else if (input.kind === "trofeu") {
+    if (primary.format !== "chapa") throw new Error("O material do corpo do troféu precisa estar cadastrado como chapa.");
+    const spacing = Math.max(n(input.medalSpacingMm), 2);
+    const waste = n(input.wastePercent || primary.default_waste_percent);
+    const nesting = sheet(primary, w + spacing, h + spacing, q, 0);
+    const sheetArea = n(primary.width_mm) * n(primary.height_mm) / 1e6;
+    const equivalentSheets = q / Math.max(nesting.capacity, 1) * (1 + waste / 100);
+    const bodyCost = equivalentSheets * unitCost(primary);
+    purchasedArea = sheetArea * equivalentSheets; effectiveArea = area; wasteArea = Math.max(0, purchasedArea - effectiveArea); rotated = nesting.rotated;
+    materialCost = bodyCost;
+    calculatedWasteCost = purchasedArea ? bodyCost * wasteArea / purchasedArea : 0;
+    lines.push({ key: "trophy-body", label: primary.name, detail: `${nesting.sheets} chapa(s) a separar · ${nesting.capacity} corpo(s) por chapa · custo rateado em ${round(equivalentSheets, 4)} chapa`, amount: bodyCost });
+    stock.push({ materialId: primary.id, materialName: primary.name, quantity: equivalentSheets, unit: "un equivalente", source: "trofeu-corpo" });
+
+    const baseW = n(input.baseWidthMm) || Math.max(80, Math.round(w * 0.85));
+    const baseD = n(input.baseDepthMm) || 60;
+    const baseLayers = Math.max(1, Math.min(3, Math.round(n(input.trophyBaseLayers || 1))));
+    let baseCutPerimeter = 0;
+    if (secondary && secondary.format === "chapa") {
+      const baseNesting = sheet(secondary, baseW + spacing, baseD + spacing, q * baseLayers, 0);
+      const baseSheetsEq = (q * baseLayers) / Math.max(baseNesting.capacity, 1) * (1 + waste / 100);
+      const baseCost = baseSheetsEq * unitCost(secondary);
+      lines.push({ key: "trophy-base", label: `Base · ${secondary.name}`, detail: `${baseLayers} camada(s) (${baseW} × ${baseD} mm) · ${round(baseSheetsEq, 4)} chapa equivalente`, amount: baseCost });
+      stock.push({ materialId: secondary.id, materialName: secondary.name, quantity: baseSheetsEq, unit: "un equivalente", source: "trofeu-base" });
+      materialCost += baseCost;
+      baseCutPerimeter = 2 * (baseW + baseD) * baseLayers;
+    }
+    if (n(input.basePlateCost)) {
+      lines.push({ key: "trophy-base-ready", label: "Base pronta / acabamento especial", detail: `${q} unidade(s) × R$ ${round(n(input.basePlateCost), 2)}`, amount: q * n(input.basePlateCost) });
+    }
+
+    const personalization = input.trophyPersonalization || "gravacao";
+    const hasEngraving = personalization === "gravacao" || personalization === "gravacao_aplique";
+    const hasApplique = personalization === "aplique" || personalization === "gravacao_aplique";
+    let extraCutPerimeter = 0;
+    if (hasApplique && tertiary && tertiary.format === "chapa") {
+      const appNesting = sheet(tertiary, w + spacing, h + spacing, q, 0);
+      const appSheetsEq = q / Math.max(appNesting.capacity, 1) * (1 + waste / 100);
+      const appCost = appSheetsEq * unitCost(tertiary);
+      lines.push({ key: "trophy-applique", label: `Aplique · ${tertiary.name}`, detail: `${round(appSheetsEq, 4)} chapa equivalente`, amount: appCost });
+      stock.push({ materialId: tertiary.id, materialName: tertiary.name, quantity: appSheetsEq, unit: "un equivalente", source: "trofeu-aplique" });
+      materialCost += appCost;
+      extraCutPerimeter = 2 * (w + h);
+    } else if (personalization === "uv_adesivo" && tertiary && isLinearMaterial(tertiary)) {
+      const sticker = roll(tertiary, w, h, q, Math.max(waste, 10));
+      lines.push({ key: "trophy-uv-sticker", label: tertiary.name, detail: `${round(sticker.length, 3)} m lineares para ${q} troféu(s)`, amount: sticker.cost });
+      stock.push({ materialId: tertiary.id, materialName: tertiary.name, quantity: sticker.length, unit: "m", source: "personalizacao" });
+      materialCost += sticker.cost;
+    }
+
+    const totalPerimeterEach = 2 * (w + h) + baseCutPerimeter + extraCutPerimeter;
+    const cutMinutes = totalPerimeterEach * q / Math.max(n(input.cutSpeedMmMin || 500), 1);
+    const engravingArea = hasEngraving ? area * Math.max(n(input.engravingCoveragePercent || 30), 1) / 100 : 0;
+    const engravingMinutes = engravingArea / Math.max(n(input.engravingSpeedM2Hour || 0.25), .001) * 60;
+    if (!calculatedMachineMinutes) calculatedMachineMinutes = cutMinutes + engravingMinutes;
+    if (n(input.assemblyCostPerUnit)) lines.push({ key: "trophy-assembly", label: "Cola, montagem e embalagem", detail: `${q} unidade(s) × R$ ${round(n(input.assemblyCostPerUnit), 2)}`, amount: q * n(input.assemblyCostPerUnit) });
+    if (n(input.finishingCost)) lines.push({ key: "trophy-finishing", label: "Personalização UV / acabamento extra", detail: "Custo direto informado", amount: n(input.finishingCost) });
+    varnishArea = 0;
+    materialUsage = `${q} troféu(s) em ${primary.name} (${nesting.capacity}/chapa)${secondary ? ` + base ${baseLayers}× ${secondary.name}` : ""}`;
+    Object.assign(metrics, { quantity: q, piecesPerSheet: nesting.capacity, baseSizeMm: `${baseW} × ${baseD}`, baseLayers, personalization, cutMinutes: round(cutMinutes, 2), engravingMinutes: round(engravingMinutes, 2) });
+  } else if (input.kind === "cavalete") {
+    if (primary.format !== "chapa") throw new Error("As chapas do cavalete precisam estar cadastradas como chapa.");
+    if (!secondary) throw new Error("Selecione o adesivo para as duas faces do cavalete.");
+    const facesQty = q * 2;
+    const waste = n(input.wastePercent || primary.default_waste_percent);
+    const boardNesting = sheet(primary, w, h, facesQty, 0);
+    const sheetArea = n(primary.width_mm) * n(primary.height_mm) / 1e6;
+    const netFacesArea = w * h * facesQty / 1e6;
+    const chargeableBoardArea = Math.min(boardNesting.purchasedArea, netFacesArea * (1 + waste / 100));
+    const equivalentSheets = chargeableBoardArea / Math.max(sheetArea, .000001);
+    const boardCost = equivalentSheets * unitCost(primary);
+    lines.push({ key: "cavalete-boards", label: primary.name, detail: `${facesQty} face(s) (${q} cavalete(s) dupla face) · ${boardNesting.sheets} chapa(s) a separar · rateado em ${round(equivalentSheets, 4)} chapa`, amount: boardCost });
+    stock.push({ materialId: primary.id, materialName: primary.name, quantity: equivalentSheets, unit: "un equivalente", source: "cavalete-chapas" });
+
+    const vinyl = roll(secondary, w, h, facesQty, Math.max(waste, n(secondary.default_waste_percent)), 0, 0, undefined, true);
+    lines.push({ key: "cavalete-vinyl", label: secondary.name, detail: `${round(vinyl.length, 2)} m lineares para ${facesQty} face(s)`, amount: vinyl.cost });
+    stock.push({ materialId: secondary.id, materialName: secondary.name, quantity: vinyl.length, unit: "m", source: "adesivo" });
+
+    let extraMatCost = 0;
+    if (tertiary && isLinearMaterial(tertiary)) {
+      const lam = roll(tertiary, w, h, facesQty, Math.max(waste, n(tertiary.default_waste_percent)), 0, 0, undefined, true);
+      lines.push({ key: "cavalete-lamination", label: tertiary.name, detail: `${round(lam.length, 2)} m lineares de laminação`, amount: lam.cost });
+      stock.push({ materialId: tertiary.id, materialName: tertiary.name, quantity: lam.length, unit: "m", source: "laminacao" });
+      extraMatCost += lam.cost;
+    }
+
+    const mode = input.cavaleteStructureMode || "fabricar";
+    if (mode === "fabricar") {
+      const structMat = materials.find((item) => item.id === input.structureMaterialId);
+      if (structMat) {
+        const barLen = n(structMat.length_m);
+        if (!barLen) throw new Error(`Informe o comprimento da barra de “${structMat.name}”.`);
+        const usedM = (2 * (w / 1000 + h / 1000) * 2 + 4 * 0.25) * q;
+        const bars = Math.ceil(usedM / barLen);
+        const structCost = bars * unitCost(structMat);
+        lines.push({ key: "cavalete-structure", label: structMat.name, detail: `${bars} barra(s) · ${round(usedM, 2)} m para 2 quadros + pés`, amount: structCost });
+        stock.push({ materialId: structMat.id, materialName: structMat.name, quantity: bars, unit: "un", source: "estrutura-cavalete" });
+        extraMatCost += structCost;
+      }
+      const weldM = 12 * 0.04 * q;
+      if (n(input.weldingCostPerMeter)) lines.push({ key: "cavalete-weld", label: "Solda e consumíveis", detail: `${round(weldM, 2)} m estimados`, amount: weldM * n(input.weldingCostPerMeter) });
+      if (input.paintIncluded && n(input.paintCost)) lines.push({ key: "cavalete-paint", label: "Pintura da estrutura", detail: "Primer e acabamento", amount: n(input.paintCost) });
+    } else if (n(input.basePlateCost)) {
+      lines.push({ key: "cavalete-ready", label: "Estrutura de cavalete pronto", detail: `${q} unidade(s) × R$ ${round(n(input.basePlateCost), 2)}`, amount: q * n(input.basePlateCost) });
+    }
+
+    if (n(input.hardwareCost)) lines.push({ key: "cavalete-hardware", label: "Dobradiças, corrente e pés", detail: "Ferragens do cavalete", amount: n(input.hardwareCost) });
+    if (n(input.applicationCostPerM2)) lines.push({ key: "cavalete-app", label: "Aplicação do adesivo (2 faces)", detail: `${round(netFacesArea, 3)} m² × R$ ${round(n(input.applicationCostPerM2), 2)}/m²`, amount: netFacesArea * n(input.applicationCostPerM2) });
+    if (n(input.finishingCost)) lines.push({ key: "cavalete-finishing", label: "Corte e acabamento", detail: "Custo direto informado", amount: n(input.finishingCost) });
+
+    effectiveArea = netFacesArea; purchasedArea = chargeableBoardArea + vinyl.purchasedArea; wasteArea = Math.max(0, purchasedArea - netFacesArea * 2); rotated = vinyl.rotated;
+    materialCost = boardCost + vinyl.cost + extraMatCost;
+    calculatedWasteCost = purchasedArea ? (boardCost + vinyl.cost) * wasteArea / purchasedArea : 0;
+    varnishArea = input.printed && !tertiary ? netFacesArea : 0;
+    materialUsage = `${q} cavalete(s) dupla face · ${round(equivalentSheets, 2)} chapa(s) + ${round(vinyl.length, 2)} m de adesivo`;
+    Object.assign(metrics, { quantity: q, faces: facesQty, structureMode: mode === "fabricar" ? "Estrutura fabricada" : "Cavalete pronto", vinylLengthM: round(vinyl.length, 2) });
+  } else if (input.kind === "wind_banner") {
+    const sides = Math.max(1, Math.min(2, Math.round(n(input.windBannerSides || 2))));
+    const baseType = input.windBannerBaseType || "agua";
+    const waste = n(input.wastePercent || primary.default_waste_percent);
+    const allow = n(input.allowanceMm || 30) * 2;
+    effectiveArea = w * h * q * sides / 1e6;
+    if (primary.id !== "outsourced-wind-banner") {
+      if (isLinearMaterial(primary)) {
+        const fabric = roll(primary, w, h, q * sides, waste, allow, allow, n(input.primaryLinearMeterCost) || undefined, true);
+        materialCost += fabric.cost; purchasedArea = fabric.purchasedArea; wasteArea = fabric.wasteArea; rotated = fabric.rotated;
+        calculatedWasteCost = purchasedArea ? fabric.cost * wasteArea / purchasedArea : 0;
+        lines.push({ key: "wind-fabric", label: primary.name, detail: `${round(fabric.length, 2)} m lineares · ${sides === 2 ? "dupla face" : "face simples"} · ${q} bandeira(s)`, amount: fabric.cost });
+        stock.push({ materialId: primary.id, materialName: primary.name, quantity: fabric.length, unit: "m", source: "tecido-wind-banner" });
+      } else {
+        const kitCost = q * unitCost(primary);
+        materialCost += kitCost; purchasedArea = effectiveArea;
+        lines.push({ key: "wind-kit", label: primary.name, detail: `${q} unidade(s) × R$ ${round(unitCost(primary), 2)}`, amount: kitCost });
+        stock.push({ materialId: primary.id, materialName: primary.name, quantity: q, unit: "un", source: "tecido-wind-banner" });
+      }
+    }
+    if (secondary) {
+      const poleCost = q * unitCost(secondary);
+      lines.push({ key: "wind-pole", label: `Haste · ${secondary.name}`, detail: `${q} haste(s)`, amount: poleCost });
+      stock.push({ materialId: secondary.id, materialName: secondary.name, quantity: q, unit: "un", source: "haste-wind-banner" });
+      materialCost += poleCost;
+    } else if (n(input.hardwareCost)) {
+      lines.push({ key: "wind-pole-direct", label: "Haste / mastro (fibra ou alumínio)", detail: `${q} unidade(s) × R$ ${round(n(input.hardwareCost), 2)}`, amount: q * n(input.hardwareCost) });
+    }
+    if (baseType !== "sem_base") {
+      const baseLabel = baseType === "agua" ? "Base de água/areia" : baseType === "ferro" ? "Base de ferro / cruz" : "Estaca para grama";
+      if (tertiary) {
+        const baseCost = q * unitCost(tertiary);
+        lines.push({ key: "wind-base", label: `${baseLabel} · ${tertiary.name}`, detail: `${q} base(s)`, amount: baseCost });
+        stock.push({ materialId: tertiary.id, materialName: tertiary.name, quantity: q, unit: "un", source: "base-wind-banner" });
+        materialCost += baseCost;
+      } else if (n(input.basePlateCost)) {
+        lines.push({ key: "wind-base-direct", label: baseLabel, detail: `${q} unidade(s) × R$ ${round(n(input.basePlateCost), 2)}`, amount: q * n(input.basePlateCost) });
+      }
+    }
+    if (n(input.finishingCost)) lines.push({ key: "wind-finishing", label: "Costura, sublimação e acabamento", detail: "Custo total informado para o lote", amount: n(input.finishingCost) });
+    varnishArea = 0;
+    materialUsage = `${q} wind banner(s) ${round(w / 1000, 2)} × ${round(h / 1000, 2)} m · ${sides === 2 ? "dupla face" : "face simples"} · ${baseType === "sem_base" ? "somente refil/haste" : `base ${baseType}`}`;
+    Object.assign(metrics, { quantity: q, sides, baseType, totalFabricAreaM2: round(effectiveArea, 3) });
+  } else if (input.kind === "vitrine_vidro") {
+    const filmType = input.glassFilmType || "perfurado";
+    const heightType = input.heightWorkType || "terreo";
+    const waste = n(input.wastePercent || primary.default_waste_percent || 10);
+    const vinyl = roll(primary, w, h, q, waste, 0, 0, n(input.primaryLinearMeterCost) || undefined, true);
+    materialCost = vinyl.cost; purchasedArea = vinyl.purchasedArea; effectiveArea = vinyl.productionArea; wasteArea = vinyl.wasteArea; rotated = vinyl.rotated;
+    calculatedWasteCost = purchasedArea ? vinyl.cost * wasteArea / purchasedArea : 0;
+    lines.push({ key: "glass-vinyl", label: primary.name, detail: `${round(vinyl.length, 2)} m lineares · ${vinyl.strips > 1 ? `${vinyl.strips} faixas com emenda · ` : ""}largura útil ${vinyl.rollWidth} mm`, amount: vinyl.cost });
+    stock.push({ materialId: primary.id, materialName: primary.name, quantity: vinyl.length, unit: "m", source: "vitrine-adesivo" });
+
+    if (filmType === "impresso" && secondary && isLinearMaterial(secondary)) {
+      const lam = roll(secondary, w, h, q, waste, 0, 0, undefined, true);
+      lines.push({ key: "glass-lamination", label: secondary.name, detail: `${round(lam.length, 2)} m lineares de laminação`, amount: lam.cost });
+      stock.push({ materialId: secondary.id, materialName: secondary.name, quantity: lam.length, unit: "m", source: "laminacao" });
+      materialCost += lam.cost;
+    }
+    if (filmType === "recorte" && input.transferMaskIncluded && tertiary && isLinearMaterial(tertiary)) {
+      const mask = roll(tertiary, w, h, q, waste, 0, 0, undefined, true);
+      lines.push({ key: "glass-mask", label: tertiary.name, detail: `${round(mask.length, 2)} m lineares de máscara de transferência`, amount: mask.cost });
+      stock.push({ materialId: tertiary.id, materialName: tertiary.name, quantity: mask.length, unit: "m", source: "mascara-transferencia" });
+      materialCost += mask.cost;
+    }
+    if (n(input.removalHours)) lines.push({ key: "glass-removal", label: "Remoção de adesivo antigo e limpeza", detail: `${round(n(input.removalHours), 2)} h de equipe`, amount: n(input.removalHours) * (n(settings.labor_cost_hour) + n(settings.overhead_hour)) });
+    if (n(input.designHours)) lines.push({ key: "glass-design", label: "Arte e fechamento de arquivo", detail: `${round(n(input.designHours), 2)} h`, amount: n(input.designHours) * (n(settings.labor_cost_hour) + n(settings.overhead_hour)) });
+    if (filmType === "recorte" && n(input.weedingCost)) lines.push({ key: "glass-weeding", label: "Depilação e aplicação da máscara", detail: "Preparação do recorte", amount: n(input.weedingCost) });
+    if (n(input.applicationCostPerM2)) lines.push({ key: "glass-application", label: `Aplicação em vidro (${heightType === "andaime" ? "andaime/altura" : heightType === "escada" ? "escada" : "térreo"})`, detail: `${round(effectiveArea, 3)} m² × R$ ${round(n(input.applicationCostPerM2), 2)}/m²`, amount: effectiveArea * n(input.applicationCostPerM2) });
+    if (n(input.travelCost)) lines.push({ key: "glass-travel", label: "Deslocamento, estacionamento e limpeza", detail: "Visita técnica e insumos de aplicação", amount: n(input.travelCost) });
+    if (n(input.finishingCost)) lines.push({ key: "glass-finishing", label: "Acabamento adicional", detail: "Refile, selador de borda ou outros", amount: n(input.finishingCost) });
+    varnishArea = ["impresso", "perfurado"].includes(filmType) && !secondary ? effectiveArea : 0;
+    materialUsage = `${round(vinyl.length, 2)} m de ${primary.name} · ${round(effectiveArea, 2)} m² de vidro (${filmType})`;
+    Object.assign(metrics, { filmType, heightWorkType: heightType, vinylLengthM: round(vinyl.length, 2), strips: vinyl.strips, removalHours: n(input.removalHours), travelIncluded: n(input.travelCost) > 0 });
   }
 
   if (input.fixingMaterialId || input.fixingType || n(input.fixingCost)) {
     const basePerimeterM = 2 * (w + h) / 1000 * q;
     const fixingPerimeterM = input.kind === "estrutura_lona"
       ? basePerimeterM * (input.doubleFrame ? 2 : 1)
-      : input.kind === "totem"
-        ? basePerimeterM * Math.max(1, Math.min(2, Math.round(n(input.totemFaces || 2))))
+      : input.kind === "totem" || input.kind === "luminoso_backlight"
+        ? basePerimeterM * Math.max(1, Math.min(2, Math.round(n(input.totemFaces || (input.kind === "totem" ? 2 : 1)))))
         : input.kind === "letra_caixa"
           ? n(metrics.perimeterM as number)
           : basePerimeterM;
