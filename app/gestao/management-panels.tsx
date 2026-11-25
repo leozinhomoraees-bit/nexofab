@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowRight, Boxes, CalendarClock, Check, CheckCircle2, CircleDollarSign, ClipboardCheck, ClipboardList, Columns3, Factory, FileText, Gauge, GripVertical, LayoutGrid, MessageCircle, PackageCheck, Palette, Play, Plus, Printer, RefreshCw, Sparkles, Tag, Target, TrendingUp, Tv, Users, WalletCards, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Boxes, CalendarClock, CalendarDays, Check, CheckCircle2, CircleDollarSign, ClipboardCheck, ClipboardList, Columns3, Factory, FileText, Gauge, GripVertical, LayoutGrid, MapPin, MessageCircle, Navigation, PackageCheck, Palette, Play, Plus, Printer, RefreshCw, Sparkles, Tag, Target, TrendingUp, Tv, Users, WalletCards, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,6 +11,14 @@ import { CashflowBarLineChart, CommercialFunnelChart, type CashSeriesPoint, type
 import { OsQrCode } from "./os-qr-code";
 import { OsShippingLabelsDialog } from "./os-shipping-labels";
 import { ShopFloorTvBoard } from "./shop-floor-tv-board";
+import {
+  InstallationAgenda,
+  googleMapsUrl,
+  inferDeliveryMode,
+  resolveOrderAddress,
+  wazeUrl,
+  type DeliveryMode,
+} from "./installation-agenda";
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const showDate = (value?: string | null) => value ? new Date(value).toLocaleDateString("pt-BR") : "—";
@@ -243,7 +251,7 @@ type ProductionReservation = { id: string; planned_quantity: number; reserved_qu
 type ProductionActualEntry = { id: string; entry_type: string; description: string; quantity: number; unit: string; unit_cost: number; total_cost: number; notes?: string | null; occurred_at: string };
 type ProductionArtworkApproval = { id: string; version: number; title: string; file_url: string; content_type?: string | null; public_token: string; status: string; customer_notes?: string | null; responded_at?: string | null; created_at: string };
 type ProductionStaff = { id: string; full_name?: string | null; role: string };
-type ProductionOrder = { id: string; number: number; quote_id?: string | null; title: string; description?: string | null; stage: string; priority: string; due_at?: string | null; scheduled_start_at?: string | null; responsible_id?: string | null; started_at?: string | null; completed_at?: string | null; created_at: string; updated_at?: string; production_material_reservations?: ProductionReservation[]; production_actual_entries?: ProductionActualEntry[]; production_artwork_approvals?: ProductionArtworkApproval[]; quotes?: { id?: string; number?: number; customer_name?: string; company?: string | null; phone?: string | null; email?: string | null; service?: string; details?: string | null; internal_notes?: string | null; estimated_value?: number | null; delivery_days?: number | null; payment_terms?: string | null; installation_included?: boolean; quote_items?: ProductionItem[] } | null };
+type ProductionOrder = { id: string; number: number; quote_id?: string | null; title: string; description?: string | null; stage: string; priority: string; due_at?: string | null; scheduled_start_at?: string | null; responsible_id?: string | null; delivery_mode?: DeliveryMode | null; scheduled_time?: string | null; site_address?: string | null; site_notes?: string | null; customer_address?: string | null; started_at?: string | null; completed_at?: string | null; created_at: string; updated_at?: string; production_material_reservations?: ProductionReservation[]; production_actual_entries?: ProductionActualEntry[]; production_artwork_approvals?: ProductionArtworkApproval[]; quotes?: { id?: string; number?: number; customer_name?: string; company?: string | null; phone?: string | null; email?: string | null; service?: string; details?: string | null; internal_notes?: string | null; estimated_value?: number | null; delivery_days?: number | null; payment_terms?: string | null; installation_included?: boolean; quote_items?: ProductionItem[] } | null };
 type ProductionReminder = { order: ProductionOrder; kind: "overdue" | "due" | "pending"; title: string; text: string };
 type ProductionUpdateResult = { ok: boolean; stockDeducted?: boolean; negativeStockAllowed?: boolean; error?: string };
 type ProductionChanges = Record<string, string | boolean | null>;
@@ -271,8 +279,9 @@ export function ProductionPanel({ search, initialOrderId }: { search: string; in
   const [deepLinkHandled, setDeepLinkHandled] = useState(false);
   const [staff, setStaff] = useState<ProductionStaff[]>([]);
   const [advancedControl, setAdvancedControl] = useState(true);
+  const [scheduleColumnsReady, setScheduleColumnsReady] = useState(true);
   const [stageFilter, setStageFilter] = useState("ativos");
-  const [viewMode, setViewMode] = useState<"kanban" | "grid">("kanban");
+  const [viewMode, setViewMode] = useState<"kanban" | "agenda" | "grid">("kanban");
   const [dragOrderId, setDragOrderId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [movingOrderId, setMovingOrderId] = useState<string | null>(null);
@@ -283,7 +292,7 @@ export function ProductionPanel({ search, initialOrderId }: { search: string; in
   useEffect(() => {
     const t = window.setTimeout(() => {
       const saved = window.localStorage.getItem(productionViewStorageKey);
-      if (saved === "grid" || saved === "kanban") setViewMode(saved);
+      if (saved === "grid" || saved === "kanban" || saved === "agenda") setViewMode(saved);
     }, 0);
     return () => window.clearTimeout(t);
   }, []);
@@ -304,11 +313,11 @@ export function ProductionPanel({ search, initialOrderId }: { search: string; in
     }, 0);
     return () => window.clearTimeout(t);
   }, [deepLinkHandled, initialOrderId, loading, notify, orders]);
-  const switchView = (mode: "kanban" | "grid") => {
+  const switchView = (mode: "kanban" | "agenda" | "grid") => {
     setViewMode(mode);
     try { window.localStorage.setItem(productionViewStorageKey, mode); } catch { /* ignore */ }
   };
-  const load = useCallback(() => api<{ orders: ProductionOrder[]; staff?: ProductionStaff[]; advancedControl?: boolean; pagination?: { hasMore: boolean } }>("/api/gestao/producao?limit=100&offset=0").then((result) => { setOrders(result.orders); setHasMoreOrders(Boolean(result.pagination?.hasMore)); setStaff(result.staff ?? []); setAdvancedControl(result.advancedControl !== false); setSelected((current) => current ? result.orders.find((order) => order.id === current.id) ?? null : null); }).finally(() => setLoading(false)), []);
+  const load = useCallback(() => api<{ orders: ProductionOrder[]; staff?: ProductionStaff[]; advancedControl?: boolean; scheduleColumnsReady?: boolean; pagination?: { hasMore: boolean } }>("/api/gestao/producao?limit=100&offset=0").then((result) => { setOrders(result.orders); setHasMoreOrders(Boolean(result.pagination?.hasMore)); setStaff(result.staff ?? []); setAdvancedControl(result.advancedControl !== false); setScheduleColumnsReady(result.scheduleColumnsReady !== false); setSelected((current) => current ? result.orders.find((order) => order.id === current.id) ?? null : null); }).finally(() => setLoading(false)), []);
   const loadMoreOrders = useCallback(async () => {
     if (loadingMoreOrders || !hasMoreOrders) return;
     setLoadingMoreOrders(true);
@@ -395,12 +404,33 @@ export function ProductionPanel({ search, initialOrderId }: { search: string; in
       notify(response.error ?? "Não foi possível mover a ordem de serviço.", "error");
     }
   }
+  async function rescheduleOrder(orderId: string, nextDueIso: string) {
+    const order = orders.find((item) => item.id === orderId);
+    if (!order) return;
+    const previous = orders;
+    setOrders((current) => current.map((item) => item.id === orderId ? { ...item, due_at: `${nextDueIso}T23:59:59-03:00` } : item));
+    const response = await update(orderId, { dueAt: nextDueIso }, `OS-${order.number} agendada para ${new Date(`${nextDueIso}T12:00:00`).toLocaleDateString("pt-BR")}.`);
+    if (response.ok) {
+      notify(`OS-${order.number} agendada para ${new Date(`${nextDueIso}T12:00:00`).toLocaleDateString("pt-BR")}.`, "success");
+    } else {
+      setOrders(previous);
+      notify(response.error ?? "Não foi possível reagendar a ordem de serviço.", "error");
+    }
+  }
   function contact(order: ProductionOrder) { const destination = whatsappUrl(order.quotes?.phone, `Olá, ${order.quotes?.customer_name ?? "cliente"}! Estamos atualizando a produção do seu pedido #${order.quotes?.number ?? order.number} — ${order.quotes?.service ?? order.title}. A etapa atual é: ${stageLabel[order.stage] ?? order.stage}.`); if (!destination) { setMessage("Cadastre um WhatsApp válido no cliente deste pedido antes de enviar a atualização."); return; } window.open(destination, "_blank", "noopener,noreferrer"); }
-  return <><SectionHeading eyebrow="CHÃO DE FÁBRICA · PCP" title="Produção" description="Arraste ordens entre etapas no quadro Kanban, acompanhe prazos na TV da fábrica ou escaneie o QR Code da OS." action={<Button variant="outline" onClick={() => setTvMode(true)}><Tv/>Modo TV (Fábrica)</Button>}/>
+  return <><SectionHeading eyebrow="CHÃO DE FÁBRICA · PCP" title="Produção" description="Arraste ordens entre etapas no Kanban, organize instalações na Agenda ou acompanhe na TV da fábrica." action={<div className="production-head-actions"><Button variant="outline" onClick={() => switchView(viewMode === "agenda" ? "kanban" : "agenda")}><CalendarDays/>{viewMode === "agenda" ? "Voltar ao Kanban" : "Agenda de campo"}</Button><Button variant="outline" onClick={() => setTvMode(true)}><Tv/>Modo TV (Fábrica)</Button></div>}/>
     <section className="production-kpis"><button type="button" className={stageFilter === "ativos" ? "active" : ""} onClick={() => setStageFilter("ativos")}><ClipboardCheck/><span><small>ORDENS ATIVAS</small><b>{summary.active}</b></span></button><button type="button" className={stageFilter === "aguardando_programacao" ? "active" : ""} onClick={() => setStageFilter("aguardando_programacao")}><Sparkles/><span><small>A PROGRAMAR</small><b>{summary.awaiting}</b></span></button><button type="button" className={stageFilter === "em_producao" ? "active" : ""} onClick={() => setStageFilter("em_producao")}><Play/><span><small>EM PRODUÇÃO</small><b>{summary.inProduction}</b></span></button><button type="button" className={`${summary.overdue ? "danger" : ""} ${stageFilter === "atrasados" ? "active" : ""}`} onClick={() => setStageFilter("atrasados")}><CalendarClock/><span><small>PRAZO VENCIDO</small><b>{summary.overdue}</b></span></button><button type="button" className={stageFilter === "concluido" ? "active" : ""} onClick={() => setStageFilter("concluido")}><CheckCircle2/><span><small>CONCLUÍDAS</small><b>{summary.completed}</b></span></button></section>
     {reminders.length > 0 && <section className="production-reminders"><header><div><small>LEMBRETES AUTOMÁTICOS</small><h2>O que precisa de atenção agora</h2><p>Os avisos permanecem ativos até a etapa ou o prazo da ordem ser atualizado.</p></div><span>{reminders.length} pendência(s)</span></header><div>{reminders.slice(0, 8).map(({ order, kind, title, text }) => <button type="button" key={`${order.id}-${kind}`} className={kind} onClick={() => { setSelectedAutoFinalize(false); setSelected(order); }}><span>{kind === "overdue" ? <AlertTriangle/> : kind === "due" ? <CalendarClock/> : <Factory/>}</span><div><small>{title}</small><b>OS-{order.number} · {order.quotes?.company || order.quotes?.customer_name || "Cliente"}</b><p>{order.quotes?.service || order.title}</p><em>{text}</em></div><ArrowRight/></button>)}</div></section>}
-    <Feedback message={message}/><div className="production-toolbar"><label>Visualizar<select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}><option value="ativos">Ordens ativas</option><option value="aguardando_programacao">Aguardando programação</option><option value="em_producao">Em produção e acabamento</option><option value="atrasados">Prazo vencido</option><option value="todos">Todas</option>{stages.map((stage) => <option key={stage} value={stage}>{stageLabel[stage]}</option>)}</select></label><div className="view-mode-toggle" role="group" aria-label="Modo de visualização da produção"><button type="button" className={viewMode === "kanban" ? "active" : ""} onClick={() => switchView("kanban")}><Columns3/>Kanban PCP</button><button type="button" className={viewMode === "grid" ? "active" : ""} onClick={() => switchView("grid")}><LayoutGrid/>Grade</button></div><span>{viewMode === "kanban" ? kanbanOrders.length : filtered.length} ordem(ns)</span><Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw/>Atualizar</Button></div>
-    {!loading && !(viewMode === "kanban" ? kanbanOrders.length : filtered.length) ? <EmptyState icon={Factory} title="Nenhuma ordem neste filtro" text="Ao fechar um orçamento, a ordem de serviço será criada automaticamente aqui."/> : viewMode === "kanban" ? (
+    <Feedback message={message}/><div className="production-toolbar"><label>Visualizar<select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}><option value="ativos">Ordens ativas</option><option value="aguardando_programacao">Aguardando programação</option><option value="em_producao">Em produção e acabamento</option><option value="atrasados">Prazo vencido</option><option value="todos">Todas</option>{stages.map((stage) => <option key={stage} value={stage}>{stageLabel[stage]}</option>)}</select></label><div className="view-mode-toggle" role="group" aria-label="Modo de visualização da produção"><button type="button" className={viewMode === "kanban" ? "active" : ""} onClick={() => switchView("kanban")}><Columns3/>Kanban PCP</button><button type="button" className={viewMode === "agenda" ? "active" : ""} onClick={() => switchView("agenda")}><CalendarDays/>Agenda</button><button type="button" className={viewMode === "grid" ? "active" : ""} onClick={() => switchView("grid")}><LayoutGrid/>Grade</button></div><span>{viewMode === "kanban" ? kanbanOrders.length : viewMode === "agenda" ? orders.filter((order) => order.stage !== "cancelado" && matchesSearchTerm(order)).length : filtered.length} ordem(ns)</span><Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw/>Atualizar</Button></div>
+    {viewMode === "agenda" ? (
+      <InstallationAgenda
+        orders={orders.filter(matchesSearchTerm)}
+        staff={staff}
+        todayIso={today}
+        onSelectOrder={(order) => { setSelectedAutoFinalize(false); setSelected(order); }}
+        onReschedule={rescheduleOrder}
+      />
+    ) : !loading && !(viewMode === "kanban" ? kanbanOrders.length : filtered.length) ? <EmptyState icon={Factory} title="Nenhuma ordem neste filtro" text="Ao fechar um orçamento, a ordem de serviço será criada automaticamente aqui."/> : viewMode === "kanban" ? (
       <div className="pcp-kanban-board" role="region" aria-label="Quadro Kanban de Produção">
         {visibleKanbanStages.map((stageKey) => {
           const columnOrders = kanbanOrders.filter((order) => order.stage === stageKey);
@@ -485,7 +515,7 @@ export function ProductionPanel({ search, initialOrderId }: { search: string; in
     ) : <div className="production-order-grid">{filtered.map((order) => { const overdue = !["concluido", "cancelado"].includes(order.stage) && Boolean(order.due_at) && order.due_at!.slice(0, 10) < today; return <article key={order.id} className={overdue ? "overdue" : ""}><header><span>OS-{order.number}</span><em className={`priority-${order.priority}`}>{order.priority}</em></header><h3>{order.quotes?.service || order.title}</h3><p>{order.quotes?.company || order.quotes?.customer_name || "Cliente não vinculado"}</p><div><span><small>Etapa</small><b>{stageLabel[order.stage] ?? order.stage}</b></span><span><small>Prazo</small><b>{showDate(order.due_at)}</b></span><span><small>Valor</small><b>{currency.format(Number(order.quotes?.estimated_value ?? 0))}</b></span></div><footer><Button size="sm" variant="outline" onClick={() => contact(order)}><MessageCircle/>Cliente</Button><Button size="sm" onClick={() => { setSelectedAutoFinalize(false); setSelected(order); }}><FileText/>Abrir OS</Button></footer></article>; })}</div>}
     {hasMoreOrders && <div className="list-load-more"><span>Exibindo {orders.length} ordem(ns) carregada(s). Há ordens mais antigas disponíveis.</span><Button type="button" variant="outline" onClick={() => void loadMoreOrders()} disabled={loadingMoreOrders}>{loadingMoreOrders ? "Carregando..." : "Carregar mais ordens"}</Button></div>}
     {tvMode && <ShopFloorTvBoard orders={orders} staffMap={staffMap} today={today} dueSoonLimit={dueSoonLimit} onRefresh={load} onOpenOrder={(id) => { const found = orders.find((item) => item.id === id); setTvMode(false); if (found) { setSelectedAutoFinalize(false); setSelected(found); } }} onClose={() => setTvMode(false)}/>}
-    {selected && <ProductionOrderDialog key={`${selected.id}-${selectedAutoFinalize ? "fin" : "std"}`} order={selected} staff={staff} advancedControl={advancedControl} initialFinalize={selectedAutoFinalize} onClose={() => { setSelected(null); setSelectedAutoFinalize(false); }} onUpdate={update} onRefresh={load} onWhatsApp={() => contact(selected)}/>}</>;
+    {selected && <ProductionOrderDialog key={`${selected.id}-${selectedAutoFinalize ? "fin" : "std"}`} order={selected} staff={staff} advancedControl={advancedControl} scheduleColumnsReady={scheduleColumnsReady} initialFinalize={selectedAutoFinalize} onClose={() => { setSelected(null); setSelectedAutoFinalize(false); }} onUpdate={update} onRefresh={load} onWhatsApp={() => contact(selected)}/>}</>;
 }
 
 function LegacyProductionOrderDialog({ order, staff, advancedControl, onClose, onUpdate, onRefresh, onWhatsApp }: { order: ProductionOrder; staff: ProductionStaff[]; advancedControl: boolean; onClose: () => void; onUpdate: (id: string, changes: ProductionChanges, success?: string) => Promise<ProductionUpdateResult>; onRefresh: () => Promise<void>; onWhatsApp: () => void }) {
@@ -502,12 +532,17 @@ function LegacyProductionOrderDialog({ order, staff, advancedControl, onClose, o
   return <div className="workspace-modal production-order-modal" role="dialog" aria-modal="true" aria-label={`Ordem de serviço ${order.number}`} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className="workspace-dialog production-order-dialog"><div className="production-order-sheet"><header><div><small>NEXOFAB · ORDEM DE SERVIÇO</small><h2>OS-{order.number}</h2><p>Gerada em {showDate(order.created_at)} · Orçamento #{order.quotes?.number ?? "—"}</p></div><Button type="button" size="icon" variant="ghost" onClick={onClose} className="no-print"><X/></Button></header><section className="production-order-identity"><div><small>CLIENTE</small><b>{order.quotes?.company || order.quotes?.customer_name || "—"}</b><span>{order.quotes?.customer_name}{order.quotes?.phone ? ` · ${order.quotes.phone}` : ""}</span></div><div><small>PROJETO</small><b>{order.quotes?.service || order.title}</b><span>{order.quotes?.payment_terms || "Condição de pagamento não informada"}</span></div><div><small>PRAZO</small><b>{showDate(order.due_at)}</b><span>Prioridade {order.priority}</span></div></section><section className="production-order-items"><h3>Itens para produzir</h3>{items.length ? items.map((item, index) => <article key={item.id}><span>{index + 1}</span><div><b>{item.description}</b><small>{[item.material, item.service_type].filter(Boolean).join(" · ") || "Sem material informado"}{item.width_mm && item.height_mm ? ` · ${item.width_mm} × ${item.height_mm}${item.depth_mm ? ` × ${item.depth_mm}` : ""} mm` : ""}</small>{item.production_notes && <p>{item.production_notes}</p>}</div><strong>{Number(item.quantity)} {item.unit}</strong></article>) : <p className="production-order-empty">Este orçamento não possui itens detalhados.</p>}</section>{(order.quotes?.details || order.quotes?.internal_notes) && <section className="production-order-notes"><h3>Orientações</h3>{order.quotes?.details && <p><b>Escopo:</b> {order.quotes.details}</p>}{order.quotes?.internal_notes && <p><b>Observação interna:</b> {order.quotes.internal_notes}</p>}</section>}<form className="production-order-control no-print" onSubmit={save}><h3>Controle da ordem</h3><div><label>Etapa<select value={stage} onChange={(event) => setStage(event.target.value)}>{stages.map((item) => <option key={item} value={item}>{stageLabel[item]}</option>)}</select></label><label>Prioridade<select value={priority} onChange={(event) => setPriority(event.target.value)}>{priorities.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label>Prazo<Input type="date" value={dueAt} onChange={(event) => setDueAt(event.target.value)}/></label></div><label>Instruções da produção<textarea rows={4} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Acabamento, instalação e observações"/></label><footer><Button type="button" variant="outline" onClick={onWhatsApp}><MessageCircle/>Avisar cliente</Button><Button type="button" variant="outline" onClick={() => window.print()}><Printer/>Imprimir / salvar PDF</Button><Button type="submit"><Check/>Salvar alterações</Button></footer></form><footer className="production-order-signatures"><span>Responsável pela produção</span><span>Conferência / entrega</span></footer></div></div></div>;
 }
 
-function ProductionOrderDialog({ order, staff, advancedControl, initialFinalize = false, onClose, onUpdate, onRefresh, onWhatsApp }: { order: ProductionOrder; staff: ProductionStaff[]; advancedControl: boolean; initialFinalize?: boolean; onClose: () => void; onUpdate: (id: string, changes: ProductionChanges, success?: string) => Promise<ProductionUpdateResult>; onRefresh: () => Promise<void>; onWhatsApp: () => void }) {
+function ProductionOrderDialog({ order, staff, advancedControl, scheduleColumnsReady = true, initialFinalize = false, onClose, onUpdate, onRefresh, onWhatsApp }: { order: ProductionOrder; staff: ProductionStaff[]; advancedControl: boolean; scheduleColumnsReady?: boolean; initialFinalize?: boolean; onClose: () => void; onUpdate: (id: string, changes: ProductionChanges, success?: string) => Promise<ProductionUpdateResult>; onRefresh: () => Promise<void>; onWhatsApp: () => void }) {
+  const initialDeliveryMode = inferDeliveryMode(order);
   const [stage, setStage] = useState(order.stage);
   const [priority, setPriority] = useState(order.priority);
   const [dueAt, setDueAt] = useState(order.due_at?.slice(0, 10) ?? "");
   const [scheduledStartAt, setScheduledStartAt] = useState(order.scheduled_start_at?.slice(0, 10) ?? "");
   const [responsibleId, setResponsibleId] = useState(order.responsible_id ?? "");
+  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>(initialDeliveryMode);
+  const [scheduledTime, setScheduledTime] = useState(order.scheduled_time ?? "");
+  const [siteAddress, setSiteAddress] = useState(order.site_address ?? "");
+  const [siteNotes, setSiteNotes] = useState(order.site_notes ?? "");
   const [description, setDescription] = useState(order.description ?? "");
   const [actualMessage, setActualMessage] = useState("");
   const [artworkUploading, setArtworkUploading] = useState(false);
@@ -543,7 +578,26 @@ function ProductionOrderDialog({ order, staff, advancedControl, initialFinalize 
     event.preventDefault();
     setSaving(true);
     setOperationMessage("");
-    const response = await onUpdate(order.id, { stage, priority, dueAt: dueAt || null, scheduledStartAt: scheduledStartAt || null, responsibleId: responsibleId || null, description: description || null }, "Ordem de serviço atualizada.");
+    const scheduleEdited =
+      deliveryMode !== initialDeliveryMode ||
+      scheduledTime !== (order.scheduled_time ?? "") ||
+      siteAddress !== (order.site_address ?? "") ||
+      siteNotes !== (order.site_notes ?? "");
+    const payload: ProductionChanges = {
+      stage,
+      priority,
+      dueAt: dueAt || null,
+      scheduledStartAt: scheduledStartAt || null,
+      responsibleId: responsibleId || null,
+      description: description || null,
+    };
+    if (scheduleColumnsReady || scheduleEdited) {
+      payload.deliveryMode = deliveryMode;
+      payload.scheduledTime = scheduledTime.trim() || null;
+      payload.siteAddress = siteAddress.trim() || null;
+      payload.siteNotes = siteNotes.trim() || null;
+    }
+    const response = await onUpdate(order.id, payload, "Ordem de serviço atualizada.");
     setOperationMessage(response.ok ? "OK:Alterações da ordem de serviço salvas." : response.error ?? "Não foi possível salvar a ordem.");
     setSaving(false);
   }
@@ -658,7 +712,35 @@ function ProductionOrderDialog({ order, staff, advancedControl, initialFinalize 
       {advancedControl && <section className="production-cost-control no-print"><div className="production-control-title"><div><small>FECHAMENTO OPERACIONAL</small><h3>Previsto x realizado</h3></div></div><div className="production-cost-kpis"><span><small>CUSTO PREVISTO</small><b>{currency.format(estimatedCost)}</b></span><span><small>CUSTO REAL LANÇADO</small><b>{currency.format(actualCost)}</b></span><span><small>VENDA</small><b>{currency.format(saleValue)}</b></span><span className={result < 0 ? "danger" : "ok"}><small>RESULTADO ATUAL</small><b>{currency.format(result)}</b></span></div>{actualEntries.length > 0 && <div className="production-actual-list">{actualEntries.map((entry) => <article key={entry.id}><div><b>{entry.description}</b><small>{entry.entry_type.replaceAll("_", " ")} · {Number(entry.quantity)} {entry.unit} × {currency.format(Number(entry.unit_cost))}</small></div><strong>{currency.format(Number(entry.total_cost))}</strong></article>)}</div>}<Feedback message={actualMessage}/><form className="production-actual-form" onSubmit={addActualEntry}><label>Tipo<select name="entryType" defaultValue="material"><option value="material">Material</option><option value="mao_obra">Mão de obra</option><option value="maquina">Máquina</option><option value="perda">Perda</option><option value="retrabalho">Retrabalho</option><option value="terceiro">Terceirização</option><option value="outro">Outro</option></select></label><label>Descrição<Input name="description" required placeholder="Ex.: 30 min extras de router"/></label><label>Quantidade<Input name="quantity" type="number" min="0.001" step="0.001" defaultValue="1" required/></label><label>Unidade<Input name="unit" defaultValue="un" required/></label><label>Custo unitário<Input name="unitCost" type="number" min="0" step="0.01" required/></label><Button type="submit"><Plus/>Lançar custo</Button></form></section>}
       {advancedControl && <section className="production-artwork-control no-print"><div className="production-control-title"><div><small>ARTE DO CLIENTE</small><h3>Aprovação por versão</h3></div><span className={artworks[0]?.status === "ajustes" ? "danger" : "ok"}>{artworks[0] ? `Versão ${artworks[0].version}: ${artworks[0].status}` : "Nenhuma versão enviada"}</span></div>{artworks.length > 0 && <div className="production-artwork-list">{artworks.map((artwork) => { const publicUrl = `${window.location.origin}/arte/${artwork.public_token}`; return <article key={artwork.id}><div><b>V{artwork.version} · {artwork.title}</b><small>{showDate(artwork.created_at)} · {artwork.status}{artwork.customer_notes ? ` · ${artwork.customer_notes}` : ""}</small></div><Button type="button" size="sm" variant="outline" onClick={() => void navigator.clipboard.writeText(publicUrl)}>Copiar link</Button><Button type="button" size="sm" variant="outline" onClick={() => window.open(publicUrl, "_blank", "noopener,noreferrer")}>Ver aprovação</Button></article>; })}</div>}<form className="production-artwork-form" onSubmit={addArtwork}><label>Título da versão<Input name="title" required placeholder="Ex.: Fachada — arte final"/></label><label>Print ou PDF da arte<Input name="file" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" required/><small>PNG, JPG, WebP ou PDF · até 12 MB.</small></label><Button type="submit" disabled={artworkUploading}><Plus/>{artworkUploading ? "Enviando arte..." : "Enviar para aprovação"}</Button></form></section>}
       <div className="production-operation-feedback no-print"><Feedback message={operationMessage}/></div>
-      <form className="production-order-control no-print" onSubmit={save}><h3>Controle da ordem</h3><div><label>Etapa<select value={stage} onChange={(event) => setStage(event.target.value)}>{stages.map((item) => <option key={item} value={item}>{stageLabel[item]}</option>)}</select></label><label>Prioridade<select value={priority} onChange={(event) => setPriority(event.target.value)}>{priorities.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label>Início programado<Input type="date" value={scheduledStartAt} onChange={(event) => setScheduledStartAt(event.target.value)}/></label><label>Prazo<Input type="date" value={dueAt} onChange={(event) => setDueAt(event.target.value)}/></label><label>Responsável<select value={responsibleId} onChange={(event) => setResponsibleId(event.target.value)}><option value="">A definir</option>{staff.map((person) => <option key={person.id} value={person.id}>{person.full_name || "Usuário"}</option>)}</select></label></div><label>Instruções da produção<textarea rows={4} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Acabamento, conferência, instalação e observações da execução"/></label><footer><Button type="button" variant="outline" onClick={onWhatsApp}><MessageCircle/>Avisar cliente</Button><Button type="button" variant="outline" onClick={() => setLabelsOpen(true)}><Tag/>Etiquetas de volume</Button><Button type="button" variant="outline" onClick={() => window.print()}><Printer/>Imprimir / salvar PDF</Button><Button type="submit" disabled={saving || finalizing}>{saving ? <RefreshCw className="spin"/> : <Check/>}{saving ? "Salvando..." : "Salvar alterações"}</Button>{order.stage !== "concluido" && <Button type="button" disabled={saving || finalizing} onClick={() => { setOperationMessage(""); setAllowNegativeStock(false); setStockOverrideReason(""); setFinalizeOpen(true); }}><CheckCircle2/>Finalizar OS</Button>}</footer></form>
+      <form className="production-order-control no-print" onSubmit={save}><h3>Controle da ordem</h3><div><label>Etapa<select value={stage} onChange={(event) => setStage(event.target.value)}>{stages.map((item) => <option key={item} value={item}>{stageLabel[item]}</option>)}</select></label><label>Prioridade<select value={priority} onChange={(event) => setPriority(event.target.value)}>{priorities.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label>Início programado<Input type="date" value={scheduledStartAt} onChange={(event) => setScheduledStartAt(event.target.value)}/></label><label>Prazo / data na agenda<Input type="date" value={dueAt} onChange={(event) => setDueAt(event.target.value)}/></label><label>Responsável<select value={responsibleId} onChange={(event) => setResponsibleId(event.target.value)}><option value="">A definir</option>{staff.map((person) => <option key={person.id} value={person.id}>{person.full_name || "Usuário"}</option>)}</select></label></div>
+      <div className="os-field-schedule-box">
+        <div className="os-field-schedule-head">
+          <b><CalendarDays/> Agendamento de entrega / instalação</b>
+          {(() => {
+            const resolvedAddr = (siteAddress || resolveOrderAddress(order)).trim();
+            return resolvedAddr ? (
+              <div className="os-field-route-links">
+                <a href={googleMapsUrl(resolvedAddr)} target="_blank" rel="noopener noreferrer"><MapPin/>Google Maps</a>
+                <a href={wazeUrl(resolvedAddr)} target="_blank" rel="noopener noreferrer"><Navigation/>Waze</a>
+              </div>
+            ) : null;
+          })()}
+        </div>
+        <div className="os-field-schedule-grid">
+          <label>Modalidade<select value={deliveryMode} onChange={(event) => setDeliveryMode(event.target.value as DeliveryMode)}><option value="instalacao">Instalação no local</option><option value="entrega">Entrega / frete</option><option value="retirada">Retirada no balcão</option></select></label>
+          <label>Horário previsto<Input type="time" value={scheduledTime} onChange={(event) => setScheduledTime(event.target.value)}/></label>
+          <label className="span-2">Endereço da entrega / instalação
+            <div className="os-field-address-row">
+              <Input value={siteAddress} onChange={(event) => setSiteAddress(event.target.value)} placeholder={order.customer_address || "Rua, número, bairro, cidade..."}/>
+              {order.customer_address && siteAddress !== order.customer_address && (
+                <Button type="button" variant="outline" size="sm" onClick={() => setSiteAddress(order.customer_address || "")}>Usar do cliente</Button>
+              )}
+            </div>
+          </label>
+          <label className="span-2">Instruções de campo / acesso<Input value={siteNotes} onChange={(event) => setSiteNotes(event.target.value)} placeholder="Ex.: levar escada 6m, falar com João na portaria, 220V disponível..."/></label>
+        </div>
+      </div>
+      <label>Instruções da produção<textarea rows={4} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Acabamento, conferência, instalação e observações da execução"/></label><footer><Button type="button" variant="outline" onClick={onWhatsApp}><MessageCircle/>Avisar cliente</Button><Button type="button" variant="outline" onClick={() => setLabelsOpen(true)}><Tag/>Etiquetas de volume</Button><Button type="button" variant="outline" onClick={() => window.print()}><Printer/>Imprimir / salvar PDF</Button><Button type="submit" disabled={saving || finalizing}>{saving ? <RefreshCw className="spin"/> : <Check/>}{saving ? "Salvando..." : "Salvar alterações"}</Button>{order.stage !== "concluido" && <Button type="button" disabled={saving || finalizing} onClick={() => { setOperationMessage(""); setAllowNegativeStock(false); setStockOverrideReason(""); setFinalizeOpen(true); }}><CheckCircle2/>Finalizar OS</Button>}</footer></form>
       {labelsOpen && <OsShippingLabelsDialog order={order} onClose={() => setLabelsOpen(false)}/>}
       {finalizeOpen && <div className="production-finalize-backdrop no-print" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !finalizing) setFinalizeOpen(false); }}><section className="production-finalize-card" role="alertdialog" aria-modal="true" aria-labelledby="production-finalize-title"><span className="production-finalize-icon"><CheckCircle2/></span><div><small>CONCLUSÃO DA PRODUÇÃO</small><h2 id="production-finalize-title">Finalizar a OS-{order.number}?</h2><p>A ordem será concluída e o sistema baixará somente o consumo calculado dos materiais selecionados na proposta.</p>{reservations.length > 0 && <div className="production-finalize-summary"><b>{reservations.length} insumo(s) vinculado(s)</b><span>{reservations.some((item) => item.status === "insuficiente") ? "Existe saldo insuficiente. Corrija o estoque ou autorize abaixo uma baixa excepcional, que ficará registrada para conferência." : "Os saldos serão conferidos novamente antes da baixa."}</span></div>}<label className={`production-stock-override ${allowNegativeStock ? "active" : ""}`}><input type="checkbox" checked={allowNegativeStock} disabled={finalizing} onChange={(event) => { setAllowNegativeStock(event.target.checked); setOperationMessage(""); }}/><span><b>Permitir saldo negativo se faltar material</b><small>Use apenas quando o material foi realmente consumido, mas a entrada ou o saldo ainda não foi lançado. A movimentação continuará registrada.</small></span></label>{allowNegativeStock && <label className="production-stock-reason"><span>Motivo da baixa excepcional</span><textarea rows={2} value={stockOverrideReason} disabled={finalizing} onChange={(event) => setStockOverrideReason(event.target.value)} placeholder="Ex.: compra recebida e ainda não lançada no estoque"/></label>}<Feedback message={operationMessage}/></div><footer><Button type="button" variant="outline" disabled={finalizing} onClick={() => setFinalizeOpen(false)}>Continuar na OS</Button><Button type="button" disabled={finalizing} onClick={() => void finalizeOrder()}>{finalizing ? <RefreshCw className="spin"/> : <CheckCircle2/>}{finalizing ? "Conferindo e finalizando..." : "Finalizar e registrar baixa"}</Button></footer></section></div>}
       <footer className="production-order-signatures"><span>Responsável pela produção</span><span>Conferência / entrega</span></footer>

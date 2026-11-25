@@ -10,9 +10,26 @@ const stageSchema = z.object({
   scheduledStartAt: z.string().nullable().optional(),
   responsibleId: z.string().uuid().nullable().optional(),
   description: z.string().max(5000).nullable().optional(),
+  deliveryMode: z.enum(["retirada", "entrega", "instalacao"]).nullable().optional(),
+  scheduledTime: z.string().trim().max(20).nullable().optional(),
+  siteAddress: z.string().trim().max(400).nullable().optional(),
+  siteNotes: z.string().trim().max(1500).nullable().optional(),
   allowNegativeStock: z.boolean().optional(),
   stockOverrideReason: z.string().trim().max(500).nullable().optional(),
-}).refine((value) => value.stage !== undefined || value.priority !== undefined || value.dueAt !== undefined || value.scheduledStartAt !== undefined || value.responsibleId !== undefined || value.description !== undefined, { message: "Nenhuma alteração informada." });
+}).refine(
+  (value) =>
+    value.stage !== undefined ||
+    value.priority !== undefined ||
+    value.dueAt !== undefined ||
+    value.scheduledStartAt !== undefined ||
+    value.responsibleId !== undefined ||
+    value.description !== undefined ||
+    value.deliveryMode !== undefined ||
+    value.scheduledTime !== undefined ||
+    value.siteAddress !== undefined ||
+    value.siteNotes !== undefined,
+  { message: "Nenhuma alteração informada." },
+);
 
 const actualEntrySchema = z.object({
   orderId: z.string().uuid(),
@@ -64,14 +81,28 @@ export async function GET(request: Request) {
   const offset = Number.isFinite(offsetParam) ? Math.max(offsetParam, 0) : 0;
 
   if (offset === 0 && ["admin", "comercial", "producao"].includes(access.role)) await ensureApprovedProductionOrders(access.supabase, access.user.id);
+  const quoteSelect = "quotes(id, number, customer_id, customer_name, company, phone, email, service, details, internal_notes, estimated_value, delivery_days, payment_terms, installation_included, quote_items(id, description, service_type, material, width_mm, height_mm, depth_mm, quantity, unit, production_notes, pricing_snapshot, sort_order, selected_by_customer))";
   const detailed = await access.supabase.from("production_orders")
-    .select("id, number, quote_id, title, description, stage, priority, due_at, scheduled_start_at, responsible_id, started_at, completed_at, created_at, updated_at, quotes(id, number, customer_name, company, phone, email, service, details, internal_notes, estimated_value, delivery_days, payment_terms, installation_included, quote_items(id, description, service_type, material, width_mm, height_mm, depth_mm, quantity, unit, production_notes, pricing_snapshot, sort_order, selected_by_customer)), production_material_reservations(id, inventory_item_id, planned_quantity, reserved_quantity, consumed_quantity, unit, status, inventory_items(id, name, current_quantity, unit, average_cost)), production_actual_entries(id, entry_type, description, quantity, unit, unit_cost, total_cost, notes, occurred_at)")
+    .select(`id, number, quote_id, title, description, stage, priority, due_at, scheduled_start_at, responsible_id, delivery_mode, scheduled_time, site_address, site_notes, started_at, completed_at, created_at, updated_at, ${quoteSelect}, production_material_reservations(id, inventory_item_id, planned_quantity, reserved_quantity, consumed_quantity, unit, status, inventory_items(id, name, current_quantity, unit, average_cost)), production_actual_entries(id, entry_type, description, quantity, unit, unit_cost, total_cost, notes, occurred_at)`)
     .order("created_at", { ascending: false })
     .range(offset, offset + limit);
   let data: unknown[] | null = detailed.data;
-  if (detailed.error && ["42P01", "PGRST200", "PGRST205"].includes(detailed.error.code)) {
+  let scheduleColumnsReady = !detailed.error;
+  let advancedReady = !detailed.error;
+  if (detailed.error?.code === "42703") {
+    scheduleColumnsReady = false;
+    const withoutSchedule = await access.supabase.from("production_orders")
+      .select(`id, number, quote_id, title, description, stage, priority, due_at, scheduled_start_at, responsible_id, started_at, completed_at, created_at, updated_at, ${quoteSelect}, production_material_reservations(id, inventory_item_id, planned_quantity, reserved_quantity, consumed_quantity, unit, status, inventory_items(id, name, current_quantity, unit, average_cost)), production_actual_entries(id, entry_type, description, quantity, unit, unit_cost, total_cost, notes, occurred_at)`)
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit);
+    if (withoutSchedule.error) return Response.json({ error: "Não foi possível carregar a produção." }, { status: 500 });
+    data = withoutSchedule.data;
+    advancedReady = true;
+  } else if (detailed.error && ["42P01", "PGRST200", "PGRST205"].includes(detailed.error.code)) {
+    scheduleColumnsReady = false;
+    advancedReady = false;
     const fallback = await access.supabase.from("production_orders")
-      .select("id, number, quote_id, title, description, stage, priority, due_at, started_at, completed_at, created_at, updated_at, quotes(id, number, customer_name, company, phone, email, service, details, internal_notes, estimated_value, delivery_days, payment_terms, installation_included, quote_items(id, description, service_type, material, width_mm, height_mm, depth_mm, quantity, unit, production_notes, pricing_snapshot, sort_order, selected_by_customer))")
+      .select(`id, number, quote_id, title, description, stage, priority, due_at, started_at, completed_at, created_at, updated_at, ${quoteSelect}`)
       .order("created_at", { ascending: false })
       .range(offset, offset + limit);
     if (fallback.error) return Response.json({ error: "Não foi possível carregar a produção." }, { status: 500 });
@@ -80,6 +111,32 @@ export async function GET(request: Request) {
   const rawRows = (data ?? []) as Array<Record<string, unknown>>;
   const hasMore = rawRows.length > limit;
   const rows = rawRows.slice(0, limit);
+  const customerIds = [...new Set(rows.map((row) => {
+    const relation = row.quotes as Record<string, unknown> | Array<Record<string, unknown>> | null;
+    const quote = Array.isArray(relation) ? relation[0] : relation;
+    return typeof quote?.customer_id === "string" ? quote.customer_id : "";
+  }).filter(Boolean))];
+  const { data: customerRecords } = customerIds.length
+    ? await access.supabase.from("customers").select("id, address").in("id", customerIds)
+    : { data: [] as Array<{ id: string; address?: Record<string, string | null> | null }> };
+  const customerAddressById = new Map<string, string>();
+  for (const customer of customerRecords ?? []) {
+    const addr = (customer.address ?? {}) as Record<string, string | null>;
+    const formatted = [
+      [addr.street, addr.number].filter(Boolean).join(", "),
+      addr.complement,
+      addr.neighborhood,
+      [addr.city, addr.state].filter(Boolean).join(" - "),
+      addr.zip,
+    ].filter(Boolean).join(" · ");
+    if (formatted) customerAddressById.set(customer.id, formatted);
+  }
+  for (const row of rows) {
+    const relation = row.quotes as Record<string, unknown> | Array<Record<string, unknown>> | null;
+    const quote = Array.isArray(relation) ? relation[0] : relation;
+    const customerId = typeof quote?.customer_id === "string" ? quote.customer_id : "";
+    row.customer_address = customerId ? customerAddressById.get(customerId) ?? null : null;
+  }
   const snapshotMaterialIds = [...new Set(rows.flatMap((row) => {
     const relation = row.quotes as Record<string, unknown> | Array<Record<string, unknown>> | null;
     const quote = Array.isArray(relation) ? relation[0] : relation;
@@ -140,7 +197,7 @@ export async function GET(request: Request) {
       full_name: profile.full_name,
       role: roleByUser.get(profile.id) ?? "producao",
     }));
-  return Response.json({ orders: rows, staff, advancedControl: !detailed.error, pagination: { offset, limit, hasMore, nextOffset: offset + limit } });
+  return Response.json({ orders: rows, staff, advancedControl: advancedReady, scheduleColumnsReady, pagination: { offset, limit, hasMore, nextOffset: offset + limit } });
 }
 
 export async function POST(request: Request) {
@@ -233,7 +290,14 @@ export async function PATCH(request: Request) {
   if (parsed.data.scheduledStartAt !== undefined) changes.scheduled_start_at = parsed.data.scheduledStartAt ? `${parsed.data.scheduledStartAt.slice(0, 10)}T08:00:00-03:00` : null;
   if (parsed.data.responsibleId !== undefined) changes.responsible_id = parsed.data.responsibleId;
   if (parsed.data.description !== undefined) changes.description = parsed.data.description;
+  if (parsed.data.deliveryMode !== undefined) changes.delivery_mode = parsed.data.deliveryMode;
+  if (parsed.data.scheduledTime !== undefined) changes.scheduled_time = parsed.data.scheduledTime || null;
+  if (parsed.data.siteAddress !== undefined) changes.site_address = parsed.data.siteAddress || null;
+  if (parsed.data.siteNotes !== undefined) changes.site_notes = parsed.data.siteNotes || null;
   const { error } = await access.supabase.from("production_orders").update(changes).eq("id", parsed.data.id);
+  if (error?.code === "42703") {
+    return Response.json({ error: "Execute a migration 202611250001_production_delivery_schedule.sql no Supabase para salvar modalidade, horário e endereço de instalação." }, { status: 400 });
+  }
   if (error) return Response.json({ error: "Não foi possível atualizar a produção." }, { status: 500 });
   if (parsed.data.stage === "concluido") {
     const { data: reservations } = await access.supabase.from("production_material_reservations").select("id, inventory_item_id, reserved_quantity").eq("production_order_id", parsed.data.id).in("status", ["reservado", "insuficiente"]);
