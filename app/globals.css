@@ -2080,6 +2080,497 @@ main.min-h-screen, main.min-h-screen * { font-family:"Sora",sans-serif; }
   }
 }
 
+/* 11. QR Code na OS, Avanço Rápido 1-Toque e Modo TV de Chão de Fábrica */
+.production-order-header-qr {
+  align-items: center !important;
+  flex-wrap: wrap;
+}
+.production-order-header-right {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-left: auto;
+}
+.os-qr-badge {
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #d4e3e6;
+  border-radius: 11px;
+  background: #ffffff;
+  color: #102a33;
+}
+.os-qr-frame {
+  width: 84px;
+  height: 84px;
+  flex: 0 0 84px;
+  padding: 3px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #dce7ea;
+  border-radius: 8px;
+  background: #ffffff;
+}
+.os-qr-frame img {
+  display: block;
+  width: 76px;
+  height: 76px;
+  image-rendering: pixelated;
+}
+.os-qr-frame svg {
+  width: 36px;
+  height: 36px;
+  color: #6a848b;
+}
+.os-qr-caption {
+  display: grid;
+  gap: 2px;
+  max-width: 155px;
+}
+.os-qr-caption small {
+  color: #0d857b;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+.os-qr-caption b {
+  color: #0f2932;
+  font-size: 12.5px;
+  font-weight: 800;
+}
+.os-qr-caption span {
+  color: #5e777e;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.os-qr-copy {
+  margin-top: 4px;
+  padding: 3px 7px;
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #cde0df;
+  border-radius: 6px;
+  background: #f2faf9;
+  color: #0d756d;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.os-qr-copy:hover {
+  background: #e1f4f1;
+}
+.os-qr-copy svg {
+  width: 11px;
+  height: 11px;
+}
+
+.os-quick-stage-bar {
+  margin: 0 26px 16px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 11px;
+  border: 1px solid #bfe0db;
+  border-radius: 12px;
+  background: linear-gradient(130deg, #effaf8 0%, #ffffff 70%);
+}
+.os-quick-stage-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.os-quick-stage-head>div {
+  display: grid;
+  gap: 2px;
+}
+.os-quick-stage-head small {
+  color: #0d857b;
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+.os-quick-stage-head b {
+  color: #102d36;
+  font-size: 14px;
+  font-weight: 800;
+}
+.os-quick-stage-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.os-quick-stage-pills button {
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid #d2e2e4;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #3f5b63;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+.os-quick-stage-pills button:hover {
+  border-color: #0e8b81;
+  color: #0b6f67;
+}
+.os-quick-stage-pills button.active {
+  border-color: #081927;
+  background: #081927;
+  color: #c6f054;
+}
+
+/* Modo TV — Painel de Chão de Fábrica Fullscreen */
+.tv-board-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(900px 460px at 88% -8%, rgba(25, 211, 197, 0.13), transparent 62%),
+    radial-gradient(640px 360px at 8% 108%, rgba(198, 240, 84, 0.09), transparent 60%),
+    #06131d;
+  color: #f3f8fa;
+  overflow: hidden;
+}
+.tv-board-header {
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(8, 25, 39, 0.85);
+}
+.tv-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.tv-brand-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #c6f054, #19d3c5);
+  color: #06131d;
+}
+.tv-brand-icon svg {
+  width: 22px;
+  height: 22px;
+}
+.tv-brand>div {
+  display: grid;
+  gap: 2px;
+}
+.tv-brand strong {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+}
+.tv-brand strong span {
+  color: #c6f054;
+}
+.tv-brand small {
+  color: #8eb0bc;
+  font-size: 12px;
+  font-weight: 600;
+}
+.tv-kpis {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.tv-kpi {
+  min-width: 96px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  display: grid;
+  text-align: center;
+}
+.tv-kpi b {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.05;
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+}
+.tv-kpi small {
+  color: #93b3be;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.tv-kpi.danger {
+  border-color: rgba(240, 92, 66, 0.55);
+  background: rgba(224, 72, 47, 0.2);
+}
+.tv-kpi.danger b { color: #ff9c8a; }
+.tv-kpi.warn {
+  border-color: rgba(235, 173, 52, 0.5);
+  background: rgba(224, 152, 26, 0.16);
+}
+.tv-kpi.warn b { color: #ffd67a; }
+.tv-kpi.urgent {
+  border-color: rgba(198, 240, 84, 0.5);
+  background: rgba(198, 240, 84, 0.13);
+}
+.tv-kpi.urgent b { color: #c6f054; }
+.tv-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tv-clock {
+  padding-right: 12px;
+  margin-right: 4px;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  display: grid;
+  text-align: right;
+}
+.tv-clock b {
+  font-size: 20px;
+  font-weight: 800;
+  color: #c6f054;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+.tv-clock small {
+  color: #8eb0bc;
+  font-size: 11px;
+  text-transform: capitalize;
+}
+.tv-controls button {
+  min-height: 38px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #f0f6f8;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tv-controls button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+.tv-controls button svg {
+  width: 16px;
+  height: 16px;
+}
+.tv-controls button.tv-close {
+  border-color: rgba(255, 118, 96, 0.45);
+  background: rgba(214, 65, 45, 0.22);
+  color: #ffd3cc;
+}
+.tv-board-columns {
+  flex: 1;
+  min-height: 0;
+  padding: 16px 20px 20px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(220px, 1fr));
+  gap: 14px;
+  overflow-x: auto;
+}
+.tv-col {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-top: 4px solid #19d3c5;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+.tv-col.accent-blue { border-top-color: #60a5fa; }
+.tv-col.accent-amber { border-top-color: #f59e0b; }
+.tv-col.accent-teal { border-top-color: #19d3c5; }
+.tv-col.accent-violet { border-top-color: #a78bfa; }
+.tv-col.accent-emerald { border-top-color: #c6f054; }
+.tv-col>header {
+  padding: 13px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+.tv-col>header h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #e4f0f4;
+}
+.tv-col>header span {
+  min-width: 28px;
+  height: 26px;
+  padding: 0 8px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+}
+.tv-col-list {
+  padding: 12px;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  overflow-y: auto;
+  flex: 1;
+}
+.tv-col-empty {
+  margin: 0;
+  padding: 28px 12px;
+  text-align: center;
+  color: rgba(169, 198, 208, 0.52);
+  font-size: 13px;
+  font-weight: 600;
+}
+.tv-card {
+  width: 100%;
+  padding: 14px;
+  display: grid;
+  gap: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(14, 38, 54, 0.86);
+  color: #f4f8fa;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.14s ease, background-color 0.14s ease;
+}
+.tv-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(25, 211, 197, 0.55);
+  background: rgba(18, 49, 68, 0.96);
+}
+.tv-card.overdue {
+  border-color: rgba(242, 92, 68, 0.65);
+  border-left: 4px solid #f25c44;
+  background: rgba(74, 24, 24, 0.62);
+}
+.tv-card.due-soon {
+  border-left: 4px solid #f59e0b;
+}
+.tv-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.tv-card-head b {
+  font-size: 16px;
+  font-weight: 900;
+  color: #c6f054;
+  letter-spacing: -0.02em;
+}
+.tv-card-head em {
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.tv-card-head em.priority-urgente { background: #dc3f2b; color: #ffffff; }
+.tv-card-head em.priority-alta { background: #d98a18; color: #081927; }
+.tv-card-head em.priority-normal { background: rgba(255, 255, 255, 0.12); color: #d1e3e8; }
+.tv-card-head em.priority-baixa { background: rgba(255, 255, 255, 0.07); color: #8da9b3; }
+.tv-card h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #ffffff;
+}
+.tv-card p {
+  margin: 0;
+  color: #9cb9c4;
+  font-size: 13px;
+  font-weight: 600;
+}
+.tv-card-foot {
+  margin-top: 4px;
+  padding-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.tv-due {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #b4cfd8;
+}
+.tv-due svg {
+  width: 14px;
+  height: 14px;
+}
+.tv-due.overdue { color: #ff9c8a; font-weight: 900; }
+.tv-due.today { color: #c6f054; font-weight: 900; }
+.tv-due.soon { color: #ffd275; font-weight: 800; }
+.tv-owner {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(25, 211, 197, 0.16);
+  color: #7eece2;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.tv-card-alerts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tv-card-alerts span {
+  padding: 3px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 7px;
+  background: rgba(242, 92, 68, 0.22);
+  color: #ffb4a6;
+  font-size: 11.5px;
+  font-weight: 800;
+}
+.tv-card-alerts svg {
+  width: 13px;
+  height: 13px;
+}
+
+@media print {
+  .os-qr-badge {
+    border: 1px solid #999 !important;
+    background: #fff !important;
+    break-inside: avoid;
+  }
+}
+
 /* Melhorias mobile para chão de fábrica (Produção, Estoque, Orçamentos e Financeiro) */
 @media(max-width:768px){
   .dash-main { padding:18px 14px 36px; }

@@ -7,10 +7,17 @@ import { ManagementDashboard } from "./management-dashboard";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
-export default async function ManagementPage({ searchParams }: { searchParams: Promise<{ secao?: string }> }) {
+export default async function ManagementPage({ searchParams }: { searchParams: Promise<{ secao?: string; os?: string }> }) {
+  const params = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) {
+    const query = new URLSearchParams();
+    if (params.secao) query.set("secao", params.secao);
+    if (params.os) query.set("os", params.os);
+    const nextPath = query.toString() ? `/gestao?${query.toString()}` : "/gestao";
+    redirect(`/login?next=${encodeURIComponent(nextPath)}`);
+  }
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -34,10 +41,11 @@ export default async function ManagementPage({ searchParams }: { searchParams: P
     getOrganizationSubscriptionSummary(supabase, profile.active_organization_id),
   ]);
 
-  const requestedSection = (await searchParams).secao;
+  const requestedSection = params.os ? "producao" : params.secao;
   return <ManagementDashboard
     userName={profile.full_name || user.email || "Equipe"}
     initialSection={requestedSection || "visao-geral"}
+    initialOrderId={params.os || undefined}
     activeOrganizationId={profile.active_organization_id}
     activeRole={activeMembership?.role ?? "member"}
     organizations={organizations ?? []}

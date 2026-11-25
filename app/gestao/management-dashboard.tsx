@@ -105,7 +105,7 @@ function isSectionAllowed(key: string, role: string): boolean {
   return true;
 }
 
-export function ManagementDashboard({ userName, initialSection = "visao-geral", activeOrganizationId, activeRole, organizations, subscriptionSummary }: { userName: string; initialSection?: string; activeOrganizationId: string; activeRole: string; organizations: OrganizationOption[]; subscriptionSummary: SubscriptionAccessSummary }) {
+export function ManagementDashboard({ userName, initialSection = "visao-geral", initialOrderId, activeOrganizationId, activeRole, organizations, subscriptionSummary }: { userName: string; initialSection?: string; initialOrderId?: string; activeOrganizationId: string; activeRole: string; organizations: OrganizationOption[]; subscriptionSummary: SubscriptionAccessSummary }) {
   const safeInitial = isSectionAllowed(initialSection, activeRole) ? initialSection : "visao-geral";
   const [section, setSection] = useState(safeInitial);
   const [search, setSearch] = useState("");
@@ -239,7 +239,7 @@ export function ManagementDashboard({ userName, initialSection = "visao-geral", 
       />}
       {section === "precificacao" && <PricingPanel key={pricingComposer} createProductRequest={pricingComposer}/>}
       {section === "licitacoes" && isSectionAllowed("licitacoes", activeRole) && <TenderItemsPanel search={search}/>}
-      {section === "producao" && <ProductionPanel search={search}/>}
+      {section === "producao" && <ProductionPanel search={search} initialOrderId={initialOrderId}/>}
       {section === "planos-corte" && <CutPlanPanel onBuildQuote={(prefill) => {
         setQuotePrefill(prefill);
         setQuoteOpenRequest(null);

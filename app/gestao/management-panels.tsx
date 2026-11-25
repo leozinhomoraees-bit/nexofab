@@ -1,13 +1,15 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowRight, Boxes, CalendarClock, Check, CheckCircle2, CircleDollarSign, ClipboardCheck, ClipboardList, Columns3, Factory, FileText, Gauge, GripVertical, LayoutGrid, MessageCircle, PackageCheck, Palette, Play, Plus, Printer, RefreshCw, Sparkles, Target, TrendingUp, Users, WalletCards, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Boxes, CalendarClock, Check, CheckCircle2, CircleDollarSign, ClipboardCheck, ClipboardList, Columns3, Factory, FileText, Gauge, GripVertical, LayoutGrid, MessageCircle, PackageCheck, Palette, Play, Plus, Printer, RefreshCw, Sparkles, Target, TrendingUp, Tv, Users, WalletCards, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { whatsappUrl } from "@/lib/whatsapp";
 import { useToast } from "./toast-context";
 import { CashflowBarLineChart, CommercialFunnelChart, type CashSeriesPoint, type CommercialFunnelData } from "./executive-charts";
+import { OsQrCode } from "./os-qr-code";
+import { ShopFloorTvBoard } from "./shop-floor-tv-board";
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const showDate = (value?: string | null) => value ? new Date(value).toLocaleDateString("pt-BR") : "—";
@@ -259,11 +261,13 @@ const kanbanShortLabel: Record<string, string> = {
 const priorities = ["baixa", "normal", "alta", "urgente"];
 const productionViewStorageKey = "nexofab-production-view";
 
-export function ProductionPanel({ search }: { search: string }) {
+export function ProductionPanel({ search, initialOrderId }: { search: string; initialOrderId?: string }) {
   const { notify } = useToast();
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
   const [selected, setSelected] = useState<ProductionOrder | null>(null);
   const [selectedAutoFinalize, setSelectedAutoFinalize] = useState(false);
+  const [tvMode, setTvMode] = useState(false);
+  const [deepLinkHandled, setDeepLinkHandled] = useState(false);
   const [staff, setStaff] = useState<ProductionStaff[]>([]);
   const [advancedControl, setAdvancedControl] = useState(true);
   const [stageFilter, setStageFilter] = useState("ativos");
@@ -282,6 +286,23 @@ export function ProductionPanel({ search }: { search: string }) {
     }, 0);
     return () => window.clearTimeout(t);
   }, []);
+  useEffect(() => {
+    if (!initialOrderId || loading || deepLinkHandled) return;
+    const t = window.setTimeout(() => {
+      const found = orders.find((order) => order.id === initialOrderId || String(order.number) === initialOrderId);
+      setDeepLinkHandled(true);
+      if (found) {
+        setSelectedAutoFinalize(false);
+        setSelected(found);
+        const url = new URL(window.location.href);
+        url.searchParams.delete("os");
+        window.history.replaceState({}, "", url.toString());
+      } else {
+        notify("Ordem de serviço do QR Code não encontrada nesta empresa.", "error");
+      }
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [deepLinkHandled, initialOrderId, loading, notify, orders]);
   const switchView = (mode: "kanban" | "grid") => {
     setViewMode(mode);
     try { window.localStorage.setItem(productionViewStorageKey, mode); } catch { /* ignore */ }
@@ -374,7 +395,7 @@ export function ProductionPanel({ search }: { search: string }) {
     }
   }
   function contact(order: ProductionOrder) { const destination = whatsappUrl(order.quotes?.phone, `Olá, ${order.quotes?.customer_name ?? "cliente"}! Estamos atualizando a produção do seu pedido #${order.quotes?.number ?? order.number} — ${order.quotes?.service ?? order.title}. A etapa atual é: ${stageLabel[order.stage] ?? order.stage}.`); if (!destination) { setMessage("Cadastre um WhatsApp válido no cliente deste pedido antes de enviar a atualização."); return; } window.open(destination, "_blank", "noopener,noreferrer"); }
-  return <><SectionHeading eyebrow="CHÃO DE FÁBRICA · PCP" title="Produção" description="Arraste ordens entre etapas no quadro Kanban, acompanhe prazos e conclua com baixa automática de materiais."/>
+  return <><SectionHeading eyebrow="CHÃO DE FÁBRICA · PCP" title="Produção" description="Arraste ordens entre etapas no quadro Kanban, acompanhe prazos na TV da fábrica ou escaneie o QR Code da OS." action={<Button variant="outline" onClick={() => setTvMode(true)}><Tv/>Modo TV (Fábrica)</Button>}/>
     <section className="production-kpis"><button type="button" className={stageFilter === "ativos" ? "active" : ""} onClick={() => setStageFilter("ativos")}><ClipboardCheck/><span><small>ORDENS ATIVAS</small><b>{summary.active}</b></span></button><button type="button" className={stageFilter === "aguardando_programacao" ? "active" : ""} onClick={() => setStageFilter("aguardando_programacao")}><Sparkles/><span><small>A PROGRAMAR</small><b>{summary.awaiting}</b></span></button><button type="button" className={stageFilter === "em_producao" ? "active" : ""} onClick={() => setStageFilter("em_producao")}><Play/><span><small>EM PRODUÇÃO</small><b>{summary.inProduction}</b></span></button><button type="button" className={`${summary.overdue ? "danger" : ""} ${stageFilter === "atrasados" ? "active" : ""}`} onClick={() => setStageFilter("atrasados")}><CalendarClock/><span><small>PRAZO VENCIDO</small><b>{summary.overdue}</b></span></button><button type="button" className={stageFilter === "concluido" ? "active" : ""} onClick={() => setStageFilter("concluido")}><CheckCircle2/><span><small>CONCLUÍDAS</small><b>{summary.completed}</b></span></button></section>
     {reminders.length > 0 && <section className="production-reminders"><header><div><small>LEMBRETES AUTOMÁTICOS</small><h2>O que precisa de atenção agora</h2><p>Os avisos permanecem ativos até a etapa ou o prazo da ordem ser atualizado.</p></div><span>{reminders.length} pendência(s)</span></header><div>{reminders.slice(0, 8).map(({ order, kind, title, text }) => <button type="button" key={`${order.id}-${kind}`} className={kind} onClick={() => { setSelectedAutoFinalize(false); setSelected(order); }}><span>{kind === "overdue" ? <AlertTriangle/> : kind === "due" ? <CalendarClock/> : <Factory/>}</span><div><small>{title}</small><b>OS-{order.number} · {order.quotes?.company || order.quotes?.customer_name || "Cliente"}</b><p>{order.quotes?.service || order.title}</p><em>{text}</em></div><ArrowRight/></button>)}</div></section>}
     <Feedback message={message}/><div className="production-toolbar"><label>Visualizar<select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}><option value="ativos">Ordens ativas</option><option value="aguardando_programacao">Aguardando programação</option><option value="em_producao">Em produção e acabamento</option><option value="atrasados">Prazo vencido</option><option value="todos">Todas</option>{stages.map((stage) => <option key={stage} value={stage}>{stageLabel[stage]}</option>)}</select></label><div className="view-mode-toggle" role="group" aria-label="Modo de visualização da produção"><button type="button" className={viewMode === "kanban" ? "active" : ""} onClick={() => switchView("kanban")}><Columns3/>Kanban PCP</button><button type="button" className={viewMode === "grid" ? "active" : ""} onClick={() => switchView("grid")}><LayoutGrid/>Grade</button></div><span>{viewMode === "kanban" ? kanbanOrders.length : filtered.length} ordem(ns)</span><Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw/>Atualizar</Button></div>
@@ -462,6 +483,7 @@ export function ProductionPanel({ search }: { search: string }) {
       </div>
     ) : <div className="production-order-grid">{filtered.map((order) => { const overdue = !["concluido", "cancelado"].includes(order.stage) && Boolean(order.due_at) && order.due_at!.slice(0, 10) < today; return <article key={order.id} className={overdue ? "overdue" : ""}><header><span>OS-{order.number}</span><em className={`priority-${order.priority}`}>{order.priority}</em></header><h3>{order.quotes?.service || order.title}</h3><p>{order.quotes?.company || order.quotes?.customer_name || "Cliente não vinculado"}</p><div><span><small>Etapa</small><b>{stageLabel[order.stage] ?? order.stage}</b></span><span><small>Prazo</small><b>{showDate(order.due_at)}</b></span><span><small>Valor</small><b>{currency.format(Number(order.quotes?.estimated_value ?? 0))}</b></span></div><footer><Button size="sm" variant="outline" onClick={() => contact(order)}><MessageCircle/>Cliente</Button><Button size="sm" onClick={() => { setSelectedAutoFinalize(false); setSelected(order); }}><FileText/>Abrir OS</Button></footer></article>; })}</div>}
     {hasMoreOrders && <div className="list-load-more"><span>Exibindo {orders.length} ordem(ns) carregada(s). Há ordens mais antigas disponíveis.</span><Button type="button" variant="outline" onClick={() => void loadMoreOrders()} disabled={loadingMoreOrders}>{loadingMoreOrders ? "Carregando..." : "Carregar mais ordens"}</Button></div>}
+    {tvMode && <ShopFloorTvBoard orders={orders} staffMap={staffMap} today={today} dueSoonLimit={dueSoonLimit} onRefresh={load} onOpenOrder={(id) => { const found = orders.find((item) => item.id === id); setTvMode(false); if (found) { setSelectedAutoFinalize(false); setSelected(found); } }} onClose={() => setTvMode(false)}/>}
     {selected && <ProductionOrderDialog key={`${selected.id}-${selectedAutoFinalize ? "fin" : "std"}`} order={selected} staff={staff} advancedControl={advancedControl} initialFinalize={selectedAutoFinalize} onClose={() => { setSelected(null); setSelectedAutoFinalize(false); }} onUpdate={update} onRefresh={load} onWhatsApp={() => contact(selected)}/>}</>;
 }
 
@@ -568,9 +590,65 @@ function ProductionOrderDialog({ order, staff, advancedControl, initialFinalize 
     finally { setArtworkUploading(false); }
   }
 
+  const quickFlowStages = ["briefing", "arte", "aprovacao", "producao", "acabamento", "expedicao", "instalacao"] as const;
+  const currentFlowIndex = quickFlowStages.indexOf(order.stage as (typeof quickFlowStages)[number]);
+  const nextFlowStage = currentFlowIndex >= 0 && currentFlowIndex < quickFlowStages.length - 1 ? quickFlowStages[currentFlowIndex + 1] : null;
+
+  async function quickAdvanceStage(targetStage: string) {
+    if (targetStage === order.stage) return;
+    setSaving(true);
+    setOperationMessage("");
+    const response = await onUpdate(order.id, { stage: targetStage }, `OS-${order.number} avançada para ${kanbanShortLabel[targetStage] ?? targetStage}.`);
+    if (response.ok) {
+      setStage(targetStage);
+      setOperationMessage(`OK:Etapa atualizada para ${kanbanShortLabel[targetStage] ?? targetStage}.`);
+    } else {
+      setOperationMessage(response.error ?? "Não foi possível atualizar a etapa.");
+    }
+    setSaving(false);
+  }
+
   return <div className="workspace-modal production-order-modal" role="dialog" aria-modal="true" aria-label={`Ordem de serviço ${order.number}`} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <div className="workspace-dialog production-order-dialog"><div className="production-order-sheet">
-      <header><div><small>NEXOFAB · ORDEM DE SERVIÇO</small><h2>OS-{order.number}</h2><p>Gerada em {showDate(order.created_at)} · Orçamento #{order.quotes?.number ?? "—"}</p></div><Button type="button" size="icon" variant="ghost" onClick={onClose} className="no-print"><X/></Button></header>
+      <header className="production-order-header-qr">
+        <div><small>NEXOFAB · ORDEM DE SERVIÇO</small><h2>OS-{order.number}</h2><p>Gerada em {showDate(order.created_at)} · Orçamento #{order.quotes?.number ?? "—"}</p></div>
+        <div className="production-order-header-right">
+          <OsQrCode orderId={order.id} orderNumber={order.number} />
+          <Button type="button" size="icon" variant="ghost" onClick={onClose} className="no-print"><X/></Button>
+        </div>
+      </header>
+      {order.stage !== "concluido" && order.stage !== "cancelado" && (
+        <section className="os-quick-stage-bar no-print" aria-label="Avanço rápido de etapa no chão de fábrica">
+          <div className="os-quick-stage-head">
+            <div>
+              <small>ATUALIZAÇÃO RÁPIDA · 1 TOQUE</small>
+              <b>Etapa atual: {kanbanShortLabel[order.stage] ?? stageLabel[order.stage] ?? order.stage}</b>
+            </div>
+            {nextFlowStage ? (
+              <Button type="button" size="sm" disabled={saving || finalizing} onClick={() => void quickAdvanceStage(nextFlowStage)}>
+                <ArrowRight/>Avançar para {kanbanShortLabel[nextFlowStage]}
+              </Button>
+            ) : (
+              <Button type="button" size="sm" disabled={saving || finalizing} onClick={() => { setOperationMessage(""); setAllowNegativeStock(false); setStockOverrideReason(""); setFinalizeOpen(true); }}>
+                <CheckCircle2/>Finalizar OS (Baixar estoque)
+              </Button>
+            )}
+          </div>
+          <div className="os-quick-stage-pills">
+            {quickFlowStages.map((stepKey) => (
+              <button
+                key={stepKey}
+                type="button"
+                disabled={saving || finalizing}
+                className={order.stage === stepKey ? "active" : ""}
+                onClick={() => void quickAdvanceStage(stepKey)}
+              >
+                {kanbanShortLabel[stepKey]}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
       <section className="production-order-identity"><div><small>CLIENTE</small><b>{order.quotes?.company || order.quotes?.customer_name || "—"}</b><span>{order.quotes?.customer_name}{order.quotes?.phone ? ` · ${order.quotes.phone}` : ""}</span></div><div><small>PROJETO</small><b>{order.quotes?.service || order.title}</b><span>{order.quotes?.payment_terms || "Condição de pagamento não informada"}</span></div><div><small>PRAZO</small><b>{showDate(order.due_at)}</b><span>Prioridade {order.priority}</span></div></section>
       <section className="production-order-items"><h3>Itens para produzir</h3>{items.length ? items.map((item, index) => <article key={item.id}><span>{index + 1}</span><div><b>{item.description}</b><small>{[item.material, item.service_type].filter(Boolean).join(" · ") || "Sem material informado"}{item.width_mm && item.height_mm ? ` · ${item.width_mm} × ${item.height_mm}${item.depth_mm ? ` × ${item.depth_mm}` : ""} mm` : ""}</small>{item.production_notes && <p>{item.production_notes}</p>}</div><strong>{Number(item.quantity)} {item.unit}</strong></article>) : <p className="production-order-empty">Este orçamento não possui itens detalhados.</p>}</section>
       {advancedControl && <section className="production-material-control"><div className="production-control-title"><div><small>MATERIAIS DA ORDEM</small><h3>Reserva automática</h3></div><span className={reservations.some((item) => item.status === "insuficiente") ? "danger" : "ok"}>{reservations.length ? reservations.some((item) => item.status === "insuficiente") ? "Há falta de material" : "Materiais reservados" : "Sem consumo vinculado"}</span></div>{reservations.length ? <div className="production-reservation-list">{reservations.map((reservation) => { const stock = reservation.inventory_items; return <article key={reservation.id} className={reservation.status === "insuficiente" ? "shortage" : ""}><div><b>{stock?.name ?? "Insumo"}</b><small>{reservation.status === "insuficiente" ? "Saldo insuficiente" : reservation.status === "consumido" ? "Consumido" : "Separado para produção"}</small></div><span><small>NECESSÁRIO</small><b>{Number(reservation.planned_quantity).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} {reservation.unit}</b></span><span><small>EM ESTOQUE</small><b>{Number(stock?.current_quantity ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })} {stock?.unit ?? reservation.unit}</b></span></article>; })}</div> : <p className="production-order-empty">Nenhum consumo de estoque foi identificado na memória de cálculo.</p>}</section>}
