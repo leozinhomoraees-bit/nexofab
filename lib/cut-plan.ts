@@ -359,9 +359,35 @@ function planLayoutScore(placements: CutPlacement[], sheets: number, sheetWidth:
   }).reduce((sum, area) => sum + area, 0);
 }
 
-export function createCutPlan(parts: CutPart[], options: { sheetWidth: number; sheetHeight: number; quantity: number; spacing: number; margin: number; allowRotation: boolean; attemptSeed?: number; speedMmMin: number; setupMinutes: number }) {
+export function scaleCutParts(parts: CutPart[], factor: number): CutPart[] {
+  if (!Number.isFinite(factor) || factor <= 0 || Math.abs(factor - 1) < 1e-9) return parts;
+  return parts.map((part) => ({
+    ...part,
+    width: part.width * factor,
+    height: part.height * factor,
+    area: part.area * factor * factor,
+    cutLength: part.cutLength * factor,
+    contours: part.contours.map((contour) => ({
+      ...contour,
+      points: contour.points.map((point) => ({ x: point.x * factor, y: point.y * factor })),
+    })),
+  }));
+}
+
+export function createCutPlan(parts: CutPart[], options: { sheetWidth: number; sheetHeight: number; quantity: number; pieceQuantities?: Record<string, number>; spacing: number; margin: number; allowRotation: boolean; attemptSeed?: number; speedMmMin: number; setupMinutes: number }) {
   if (!parts.length) throw new Error("Carregue ao menos uma peça fechada.");
-  const copies = Array.from({ length: Math.max(1, Math.floor(options.quantity)) }, () => parts).flat().map((part, index) => ({ ...part, id: `${part.id}-copy-${index + 1}` }));
+  const multiplier = Math.max(1, Math.floor(options.quantity));
+  const copies: CutPart[] = [];
+  let copyCounter = 0;
+  for (const part of parts) {
+    const perPart = options.pieceQuantities ? Math.max(0, Math.floor(options.pieceQuantities[part.id] ?? 1)) : 1;
+    const totalForPart = perPart * multiplier;
+    for (let index = 0; index < totalForPart; index++) {
+      copyCounter += 1;
+      copies.push({ ...part, id: `${part.id}-copy-${copyCounter}` });
+    }
+  }
+  if (!copies.length) throw new Error("Ative ao menos uma peça com quantidade maior que zero.");
   const random = seededRandom(options.attemptSeed ?? 1);
   const ranks = new Map(copies.map((part) => [part.id, random()]));
   const strategies = [
@@ -386,15 +412,75 @@ export function transformContour(contour: CutContour, placement: CutPlacement) {
   return contour.points.map((point) => { const rotated = rotateLocal(point, placement.part, placement.rotation); return { x: placement.x + rotated.x, y: placement.y + rotated.y }; });
 }
 
-export function exportCutPlanDxf(plan: CutPlan) {
+export function exportCutPlanDxf(plan: CutPlan, options?: { sheetIndex?: number; sheetWidth?: number; sheetGapMm?: number }) {
   const lines = ["0", "SECTION", "2", "HEADER", "9", "$INSUNITS", "70", "4", "0", "ENDSEC", "0", "SECTION", "2", "ENTITIES"];
-  const layerColors = new Map<string, number>(); const colors = [1, 3, 5, 2, 6, 4, 7];
-  for (const placement of plan.placements) for (const contour of placement.part.contours) {
-    const points = transformContour(contour, placement);
-    const layer = contour.layer || "CORTE"; if (!layerColors.has(layer)) layerColors.set(layer, colors[layerColors.size % colors.length]);
-    lines.push("0", "LWPOLYLINE", "8", layer, "62", String(layerColors.get(layer)), "90", String(points.length), "70", "1");
-    for (const point of points) lines.push("10", String(round(point.x, 4)), "20", String(round(point.y, 4)));
+  const targetPlacements = options?.sheetIndex !== undefined
+    ? plan.placements.filter((item) => item.sheet === options.sheetIndex)
+    : plan.placements;
+  const sheetStride = options?.sheetIndex === undefined && options?.sheetWidth && options.sheetWidth > 0
+    ? options.sheetWidth + (options.sheetGapMm ?? 60)
+    : 0;
+
+  const pushContour = (points: CutPoint[], layer: string, aciColor: number, xOffset: number) => {
+    lines.push("0", "LWPOLYLINE", "8", layer, "62", String(aciColor), "90", String(points.length), "70", "1");
+    for (const point of points) {
+      lines.push("10", String(round(point.x + xOffset, 4)), "20", String(round(point.y, 4)));
+    }
+  };
+
+  // Pass 1: furos internos primeiro (ordem segura em laser e router CNC)
+  for (const placement of targetPlacements) {
+    const xOffset = placement.sheet * sheetStride;
+    for (let index = 1; index < placement.part.contours.length; index++) {
+      const points = transformContour(placement.part.contours[index], placement);
+      pushContour(points, "FUROS_INTERNOS", 1, xOffset);
+    }
   }
+  // Pass 2: contornos externos por último
+  for (const placement of targetPlacements) {
+    const xOffset = placement.sheet * sheetStride;
+    if (placement.part.contours[0]) {
+      const points = transformContour(placement.part.contours[0], placement);
+      pushContour(points, "CORTE_EXTERNO", 4, xOffset);
+    }
+  }
+
   lines.push("0", "ENDSEC", "0", "EOF");
   return lines.join("\r\n");
+}
+
+export function exportCutPlanSvg(plan: CutPlan, sheetWidth: number, sheetHeight: number, sheetIndex = 0) {
+  const safeW = Math.max(1, round(sheetWidth, 3));
+  const safeH = Math.max(1, round(sheetHeight, 3));
+  const placements = plan.placements.filter((item) => item.sheet === sheetIndex);
+  const toSvgPoints = (points: CutPoint[]) =>
+    points.map((point) => `${round(point.x, 3)},${round(safeH - point.y, 3)}`).join(" ");
+
+  const holes: string[] = [];
+  const outers: string[] = [];
+  for (const placement of placements) {
+    for (let index = 1; index < placement.part.contours.length; index++) {
+      const pts = toSvgPoints(transformContour(placement.part.contours[index], placement));
+      holes.push(`    <polygon points="${pts}" />`);
+    }
+    if (placement.part.contours[0]) {
+      const pts = toSvgPoints(transformContour(placement.part.contours[0], placement));
+      outers.push(`    <polygon points="${pts}" />`);
+    }
+  }
+
+  return [
+    `<?xml version="1.0" encoding="UTF-8"?>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${safeW}mm" height="${safeH}mm" viewBox="0 0 ${safeW} ${safeH}">`,
+    `  <g id="CHAPA" fill="none" stroke="#94a3b8" stroke-width="0.4">`,
+    `    <rect x="0" y="0" width="${safeW}" height="${safeH}" />`,
+    `  </g>`,
+    `  <g id="FUROS_INTERNOS" fill="none" stroke="#e45c25" stroke-width="0.35">`,
+    ...holes,
+    `  </g>`,
+    `  <g id="CORTE_EXTERNO" fill="none" stroke="#087d74" stroke-width="0.45">`,
+    ...outers,
+    `  </g>`,
+    `</svg>`,
+  ].join("\n");
 }

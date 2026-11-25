@@ -2929,3 +2929,491 @@ main.min-h-screen, main.min-h-screen * { font-family:"Sora",sans-serif; }
   .dash-main table { display:block; overflow-x:auto; -webkit-overflow-scrolling:touch; }
   .nexofab-toast-stack { left:16px; right:16px; bottom:14px; width:auto; }
 }
+
+/* ==========================================================================
+   Personalização de Projetos Guiados & Plano de Corte Vetorial Avançado
+   ========================================================================== */
+.calculation-type-actions,
+.submodule-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.calculation-type-actions > button {
+  min-height: 41px;
+  white-space: nowrap;
+}
+.guided-projects-modal {
+  z-index: 95;
+}
+.guided-projects-dialog {
+  width: min(860px, 96vw);
+  max-height: 90vh;
+  padding: 22px 24px;
+  display: grid;
+  gap: 16px;
+  overflow-y: auto;
+}
+.guided-projects-dialog .inline-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+  vertical-align: -2px;
+  margin-right: 6px;
+  color: #0e8b81;
+}
+.guided-modal-toolbar {
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border: 1px solid #d9e7e6;
+  border-radius: 12px;
+  background: #f5fbfa;
+}
+.guided-presets {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.guided-presets > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #2c4e54;
+  font-size: 12px;
+  font-weight: 800;
+}
+.guided-presets > span svg {
+  width: 14px;
+  height: 14px;
+  color: #0e8b81;
+}
+.guided-presets > button {
+  padding: 5px 10px;
+  border: 1px solid #c9dfdc;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #164449;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.guided-presets > button:hover {
+  border-color: #0e8b81;
+  background: #eaf8f5;
+}
+.guided-count-badge {
+  padding: 5px 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  background: #0c2635;
+  color: #c6f054;
+  font-size: 12px;
+  font-weight: 800;
+}
+.guided-count-badge svg {
+  width: 14px;
+  height: 14px;
+}
+.guided-modal-groups {
+  display: grid;
+  gap: 14px;
+}
+.guided-modal-group {
+  padding: 14px 16px;
+  border: 1px solid #e0eaea;
+  border-radius: 12px;
+  background: #ffffff;
+  display: grid;
+  gap: 11px;
+}
+.guided-modal-group > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.guided-modal-group > header > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.guided-modal-group > header strong {
+  color: #123339;
+  font-size: 14px;
+}
+.guided-modal-group > header small {
+  color: #657d82;
+  font-size: 12px;
+  font-weight: 700;
+}
+.guided-modal-group > header > button {
+  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #d5e3e3;
+  border-radius: 7px;
+  background: #f8fbfb;
+  color: #36565c;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.guided-modal-group > header > button:hover {
+  border-color: #0e8b81;
+  color: #0c7269;
+}
+.guided-modal-group > header > button svg {
+  width: 13px;
+  height: 13px;
+}
+.guided-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.guided-option-card {
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #d7e5e4;
+  border-radius: 10px;
+  background: #f8fcfb;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, opacity 0.15s ease;
+}
+.guided-option-card.enabled {
+  border-color: #93d2ca;
+  background: #effaf7;
+}
+.guided-option-card.disabled {
+  background: #f7f9fa;
+  border-style: dashed;
+  opacity: 0.68;
+}
+.guided-option-card input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: #0e8b81;
+}
+.guided-option-card > span {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 2px;
+}
+.guided-option-card b {
+  color: #13353b;
+  font-size: 13px;
+  line-height: 1.25;
+}
+.guided-option-card small {
+  color: #60777c;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.guided-option-card > em {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  background: #0e8b81;
+  color: #ffffff;
+  flex: 0 0 auto;
+}
+.guided-option-card.disabled > em {
+  background: #dce5e7;
+  color: #6a7f84;
+}
+.guided-option-card > em svg {
+  width: 13px;
+  height: 13px;
+}
+.guided-modal-note {
+  margin: 0;
+  padding: 10px 13px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  border-radius: 9px;
+  background: #fff9ec;
+  border: 1px solid #edd9ad;
+  color: #715219;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.guided-modal-note svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #bf7e16;
+}
+@media (max-width: 720px) {
+  .guided-modal-grid {
+    grid-template-columns: 1fr;
+  }
+  .calculation-type-actions {
+    width: 100%;
+  }
+  .calculation-type-actions > button {
+    flex: 1 1 auto;
+  }
+}
+
+/* Plano de corte vetorial avançado (multi-arquivo, escala, retalho, SVG, hover) */
+.cut-plan-upload-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cut-plan-upload-actions label.secondary-upload {
+  background: #ffffff;
+  color: #0d6f67;
+  border: 1px solid #9bd1ca;
+}
+.cut-plan-upload-actions label.secondary-upload:hover {
+  background: #edf9f6;
+}
+.clear-files-btn {
+  min-height: 40px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #e6c5bf;
+  border-radius: 9px;
+  background: #fff6f4;
+  color: #a63727;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.clear-files-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.cut-plan-files-chips {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cut-plan-files-chips span {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(14, 139, 129, 0.12);
+  color: #0d5e58;
+  font-size: 11px;
+  font-weight: 700;
+}
+.cut-plan-offcut-bar {
+  margin: 12px 0 6px;
+  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  border: 1px dashed #c4dbd8;
+  border-radius: 10px;
+  background: #f6fbfa;
+}
+.cut-plan-offcut-bar > span {
+  color: #466267;
+  font-size: 12px;
+  font-weight: 700;
+}
+.cut-plan-offcut-bar > button {
+  padding: 4px 9px;
+  border: 1px solid #cddfde;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #1c444a;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.cut-plan-offcut-bar > button.active,
+.cut-plan-offcut-bar > button:hover {
+  border-color: #0e8b81;
+  background: #e6f7f4;
+  color: #0b6d65;
+}
+.cut-plan-scale-bar {
+  margin-top: 14px;
+  padding: 10px 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  border: 1px solid #d9e7e6;
+  border-radius: 10px;
+  background: #f6fbfa;
+}
+.cut-plan-scale-bar > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #21454b;
+  font-size: 12px;
+  font-weight: 800;
+}
+.cut-plan-scale-bar > span svg {
+  width: 15px;
+  height: 15px;
+  color: #0e8b81;
+}
+.cut-plan-scale-bar > div {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cut-plan-scale-bar button {
+  padding: 5px 11px;
+  border: 1px solid #cbe0de;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #2b4e54;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cut-plan-scale-bar button.active {
+  border-color: #0e8b81;
+  background: #0e8b81;
+  color: #ffffff;
+}
+.cut-plan-part-card {
+  padding: 9px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #dce6e6;
+  border-radius: 9px;
+  background: #fbfdfd;
+}
+.cut-plan-part-card.muted {
+  opacity: 0.55;
+  border-style: dashed;
+}
+.cut-plan-part-toggle {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.cut-plan-part-toggle input {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  accent-color: #0e8b81;
+}
+.cut-plan-part-toggle span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.cut-plan-part-toggle b {
+  font-size: 12px;
+  color: #14363c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cut-plan-part-toggle small {
+  color: #6b8085;
+  font-size: 11px;
+}
+.cut-plan-part-qty {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+.cut-plan-part-qty small {
+  font-size: 10px;
+  font-weight: 800;
+  color: #687f84;
+  text-transform: uppercase;
+}
+.cut-plan-part-qty input {
+  width: 58px;
+  height: 30px;
+  padding: 0 6px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+.cut-plan-more-parts {
+  margin-top: 10px;
+  display: flex;
+  justify-content: center;
+}
+.cut-plan-hover-tip {
+  margin-top: 14px;
+  padding: 9px 13px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  border: 1px solid #d5e7e5;
+  border-radius: 9px;
+  background: #f4faf9;
+  color: #36565c;
+  font-size: 12px;
+}
+.cut-plan-hover-tip b {
+  color: #0e6f67;
+}
+.cut-plan-sheet-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.cut-plan-sheet-actions button {
+  padding: 3px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #cde0de;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #17494e;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.cut-plan-sheet-actions button:hover {
+  border-color: #0e8b81;
+  background: #e9f8f5;
+}
+.cut-plan-sheet-actions button svg {
+  width: 12px;
+  height: 12px;
+}
+.cut-plan-preview svg g.placement-hovered polygon.outer {
+  fill: rgba(198, 240, 84, 0.42);
+  stroke: #0c2635;
+  stroke-width: 2.2;
+}
+.cut-plan-preview svg g {
+  cursor: pointer;
+}

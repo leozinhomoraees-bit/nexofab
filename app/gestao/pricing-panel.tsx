@@ -1,9 +1,11 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Boxes, Calculator, Check, Copy, Cpu, Gauge, Layers3, Pencil, Plus, Save, Settings2, Sparkles, Trash2, X, Zap } from "lucide-react";
+import { AlertTriangle, Boxes, Calculator, Check, Copy, Cpu, Gauge, Layers3, Pencil, Plus, Save, Settings2, SlidersHorizontal, Sparkles, Trash2, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { GuidedProjectsModal } from "./guided-projects-modal";
+import { guidedProjectOptions } from "@/lib/guided-projects";
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const decimal = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 4 });
@@ -45,6 +47,7 @@ type Settings = {
   electricity_price_kwh: number; labor_cost_hour: number; overhead_hour: number; tax_percent: number;
   commission_percent: number; contingency_percent: number; target_margin_percent: number;
   maximum_margin_percent: number; productive_hours_month: number; minimum_order_value: number; rounding_increment: number;
+  disabled_guided_projects?: string[] | null;
 };
 export type PricingCatalog = { products: Product[]; materials: Material[]; machines: Machine[]; fixedCosts: FixedCost[]; fixedCostsMonthly: number; costCenters: CostCenter[]; costCentersSetupRequired?: boolean; suppliers: Supplier[]; settings: Settings | null; configured: boolean };
 type Calculation = {
@@ -329,6 +332,7 @@ export function PricingPanel({ createProductRequest = 0 }: { createProductReques
   const [productForm, setProductForm] = useState<Product | "new" | null>(createProductRequest > 0 ? "new" : null); const [materialForm, setMaterialForm] = useState<Material | "new" | null>(null); const [materialCopy, setMaterialCopy] = useState<Material | null>(null); const [machineForm, setMachineForm] = useState<Machine | "new" | null>(null);
   const [fixedCostForm, setFixedCostForm] = useState<FixedCost | "new" | null>(null);
   const [costCenterForm, setCostCenterForm] = useState<CostCenter | "new" | null>(null);
+  const [guidedModalOpen, setGuidedModalOpen] = useState(false);
   const [message, setMessage] = useState(""); const [loading, setLoading] = useState(true);
   const load = useCallback(() => api<PricingCatalog>("/api/gestao/precificacao").then(setCatalog).finally(() => setLoading(false)), []);
   useEffect(() => { load().catch((error: Error) => setMessage(error.message)); }, [load]);
@@ -358,7 +362,7 @@ export function PricingPanel({ createProductRequest = 0 }: { createProductReques
     <header className="module-heading pricing-heading"><div><p>ENGENHARIA DE CUSTOS</p><h1>Central de precificação</h1><span>Insumos, máquinas, perdas e regras comerciais conectados ao orçamento.</span></div><div className="pricing-health"><span className={setup.materials ? "done" : ""}>{setup.materials ? <Check/> : <Boxes/>} Insumos</span><span className={setup.machines ? "done" : ""}>{setup.machines ? <Check/> : <Cpu/>} Máquinas</span><span className={setup.settings ? "done" : ""}>{setup.settings ? <Check/> : <Settings2/>} Regras</span></div></header>
     <Feedback message={message}/><nav className="pricing-tabs">{([['simulador','Simulador'],['produtos','Fichas técnicas'],['insumos','Insumos e estoque'],['maquinas','Máquinas'],['centros','Centros de custo'],['fixos','Custos fixos'],['regras','Regras de preço']] as const).map(([value,label]) => <button key={value} className={tab === value ? "active" : ""} onClick={() => setTab(value)}>{label}</button>)}</nav>
     {loading ? <div className="empty-state"><Calculator/><b>Carregando custos...</b></div> : tab === "simulador" ? <Simulator catalog={catalog}/> : tab === "produtos" ? <>
-      <div className="submodule-heading"><div><h2>Produtos e tabelas comerciais</h2><p>Defina como cada produto é vendido sem misturar o preço de mercado com o custo de produção.</p></div><Button onClick={() => setProductForm("new")}><Plus/>Novo produto</Button></div>
+      <div className="submodule-heading"><div><h2>Produtos e tabelas comerciais</h2><p>Defina como cada produto é vendido sem misturar o preço de mercado com o custo de produção.</p></div><div className="submodule-heading-actions"><Button type="button" variant="outline" onClick={() => setGuidedModalOpen(true)}><SlidersHorizontal/>Projetos guiados ({guidedProjectOptions.length - (catalog.settings?.disabled_guided_projects?.length ?? 0)}/{guidedProjectOptions.length})</Button><Button onClick={() => setProductForm("new")}><Plus/>Novo produto</Button></div></div>
       {productForm && <ProductForm product={productForm === "new" ? undefined : productForm} materials={catalog.materials} machines={catalog.machines} onClose={() => setProductForm(null)} onSaved={() => saved("Produto")}/>}<div className="cost-card-grid">{catalog.products.map((product) => <article className="cost-card product-card" key={product.id}><header><span>{methodLabels[product.pricing_method]}</span><div className="row-actions"><Button variant="ghost" size="icon" aria-label={`Editar ${product.name}`} onClick={() => setProductForm(product)}><Pencil/></Button><Button variant="ghost" size="icon" aria-label={`Excluir ${product.name}`} onClick={() => remove("product", product.id, product.name)}><Trash2/></Button></div></header><h3>{product.name}</h3><p>{product.code} · {product.category}</p><div><strong>{product.pricing_product_components?.length ?? 0}</strong><small>componentes na ficha técnica</small></div><footer><span>{!product.default_material_id ? "Insumo principal pendente" : `${(product.pricing_product_components ?? []).filter((item) => !item.material_id).length} componente(s) pendente(s)`}</span><span>Arredonda de {currency.format(product.rounding_increment)}</span></footer></article>)}</div>{!catalog.products.length && <div className="empty-state"><Gauge/><b>Nenhuma ficha técnica cadastrada</b><p>Cadastre Banner 280 g, Banner 440 g, adesivos, placas e outros produtos como variações independentes, cada uma com seus próprios materiais.</p></div>}
     </> : tab === "insumos" ? <>
       <div className="submodule-heading"><div><h2>Insumos e estoque</h2><p>Um único cadastro define custo, formato de compra, largura e saldo disponível.</p></div><Button onClick={() => { setMaterialCopy(null); setMaterialForm("new"); }}><Plus/>Novo insumo</Button></div>
@@ -373,6 +377,7 @@ export function PricingPanel({ createProductRequest = 0 }: { createProductReques
     </> : tab === "fixos" ? <>
       <div className="submodule-heading"><div><h2>Custos fixos mensais</h2><p>Total de {currency.format(catalog.fixedCostsMonthly)} rateado em {decimal.format(catalog.settings?.productive_hours_month ?? 160)} horas produtivas: <b>{currency.format(catalog.fixedCostsMonthly / Math.max(Number(catalog.settings?.productive_hours_month ?? 160), 1))}/h</b>.</p></div><Button onClick={() => setFixedCostForm("new")}><Plus/>Novo custo</Button></div>
       {fixedCostForm && <FixedCostForm cost={fixedCostForm === "new" ? undefined : fixedCostForm} costCenters={catalog.costCenters} onClose={() => setFixedCostForm(null)} onSaved={() => saved("Custo fixo")}/>}<div className="cost-card-grid">{catalog.fixedCosts.map((cost) => { const center = catalog.costCenters.find((item) => item.id === cost.cost_center_id); return <article className="cost-card" key={cost.id}><header><span>{center ? center.name.toLocaleUpperCase("pt-BR") : "CUSTO GERAL"}</span><div className="row-actions"><Button variant="ghost" size="icon" aria-label={`Editar ${cost.name}`} onClick={() => setFixedCostForm(cost)}><Pencil/></Button><Button variant="ghost" size="icon" aria-label={`Excluir ${cost.name}`} onClick={() => remove("fixedCost", cost.id, cost.name)}><Trash2/></Button></div></header><h3>{cost.name}</h3><p>{cost.notes || (center ? `Exclusivo de ${center.name}` : "Distribuído entre todos os centros")}</p><div><strong>{currency.format(cost.monthly_amount)}</strong><small>por mês</small></div></article>; })}</div>{!catalog.fixedCosts.length && <div className="empty-state"><Gauge/><b>Nenhum custo fixo cadastrado</b><p>Cadastre aluguel, água, internet, contador, sistemas e demais despesas mensais.</p></div>}
-    </> : <SettingsForm key={catalog.settings?.target_margin_percent ?? "empty"} settings={catalog.settings} onSaved={load}/>} 
+    </> : <SettingsForm key={catalog.settings?.target_margin_percent ?? "empty"} settings={catalog.settings} onSaved={load}/>}
+    {guidedModalOpen && <GuidedProjectsModal disabledKinds={catalog.settings?.disabled_guided_projects ?? []} onClose={() => setGuidedModalOpen(false)} onSaved={(nextDisabled) => { if (catalog.settings) { setCatalog((current) => ({ ...current, settings: current.settings ? { ...current.settings, disabled_guided_projects: nextDisabled } : null })); } else { void load(); } setMessage(`OK:Lista de projetos guiados atualizada (${guidedProjectOptions.length - nextDisabled.length} de ${guidedProjectOptions.length} visíveis no orçamento).`); }}/>}
   </>;
 }

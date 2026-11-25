@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getManagementAccess } from "@/lib/management-auth";
+import { guidedProjectKindsSet } from "@/lib/guided-projects";
 
 export const dynamic = "force-dynamic";
 
@@ -132,6 +133,7 @@ const updateSchema = z.discriminatedUnion("entity", [
   z.object({ entity: z.literal("product"), id: z.string().uuid(), data: productData }),
   z.object({ entity: z.literal("fixedCost"), id: z.string().uuid(), data: fixedCostData }),
   z.object({ entity: z.literal("costCenter"), id: z.string().uuid(), data: costCenterData }),
+  z.object({ entity: z.literal("guidedProjects"), disabledKinds: z.array(z.string().max(60)).max(50) }),
 ]);
 const deleteSchema = z.object({ entity: z.enum(["material", "machine", "product", "fixedCost", "costCenter"]), id: z.string().uuid() });
 
@@ -405,6 +407,18 @@ export async function PATCH(request: Request) {
     let { error } = await access.supabase.from("pricing_fixed_costs").update({ name: data.name, monthly_amount: data.monthlyAmount, cost_center_id: data.costCenterId || null, notes: data.notes || null }).eq("id", parsed.data.id);
     if (error?.code === "42703") ({ error } = await access.supabase.from("pricing_fixed_costs").update({ name: data.name, monthly_amount: data.monthlyAmount, notes: data.notes || null }).eq("id", parsed.data.id));
     if (error) return Response.json({ error: "Não foi possível atualizar o custo fixo." }, { status: 500 });
+  } else if (parsed.data.entity === "guidedProjects") {
+    if (!["admin", "comercial"].includes(access.role)) return Response.json({ error: "Sem permissão para personalizar projetos guiados." }, { status: 403 });
+    const sanitized = [...new Set(parsed.data.disabledKinds.filter((kind) => guidedProjectKindsSet.has(kind)))];
+    const { data: existing } = await access.supabase.from("pricing_settings").select("id").eq("id", "default").maybeSingle();
+    const result = existing
+      ? await access.supabase.from("pricing_settings").update({ disabled_guided_projects: sanitized, updated_at: new Date().toISOString() }).eq("id", "default")
+      : await access.supabase.from("pricing_settings").insert({ id: "default", disabled_guided_projects: sanitized });
+    if (result.error?.code === "42703") {
+      return Response.json({ error: "Execute a migration 202611240001_pricing_guided_projects_preferences.sql no Supabase para salvar esta preferência." }, { status: 400 });
+    }
+    if (result.error) return Response.json({ error: "Não foi possível salvar os projetos guiados." }, { status: 500 });
+    return Response.json({ saved: true, disabledKinds: sanitized });
   } else {
     if (access.role !== "admin") return Response.json({ error: "Sem permissão para editar centros de custo." }, { status: 403 });
     const data = parsed.data.data;
