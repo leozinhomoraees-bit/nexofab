@@ -4243,3 +4243,210 @@ main.min-h-screen, main.min-h-screen * { font-family:"Sora",sans-serif; }
   gap: 7px;
   flex-wrap: wrap;
 }
+
+/* Seletor de período em Contas a Receber + Pagamentos & Recibos no Orçamento */
+.receivables-scope-toggle {
+  padding: 3px;
+  display: inline-flex;
+  gap: 3px;
+  border: 1px solid #d4e2e2;
+  border-radius: 10px;
+  background: #f4f8f8;
+}
+.receivables-scope-toggle button {
+  min-height: 32px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #496369;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.receivables-scope-toggle button.active {
+  background: #0c2635;
+  color: #ffffff;
+}
+.quote-payments-box {
+  margin: 14px 0;
+  padding: 16px 18px;
+  border: 1px solid #cfe3e0;
+  border-radius: 13px;
+  background: #f6fbfa;
+  display: grid;
+  gap: 12px;
+}
+.quote-payments-box.pending-close {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  border-color: #ebd39d;
+  background: #fffaf0;
+}
+.quote-payments-box.pending-close small {
+  color: #9b640f;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+.quote-payments-box.pending-close b {
+  display: block;
+  color: #362407;
+  font-size: 14px;
+}
+.quote-payments-box.pending-close p {
+  margin: 2px 0 0;
+  color: #6b501a;
+  font-size: 12px;
+}
+.quote-payments-box > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.quote-payments-box > header small {
+  color: #0e8b81;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.quote-payments-box > header h3 {
+  margin: 2px 0 0;
+  color: #12343a;
+  font-size: 15px;
+}
+.quote-payments-totals {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.quote-payments-totals > span {
+  padding: 6px 11px;
+  border-radius: 9px;
+  background: #ffffff;
+  border: 1px solid #d9e7e6;
+  display: grid;
+  gap: 1px;
+}
+.quote-payments-totals > span small {
+  font-size: 10px;
+  font-weight: 800;
+  color: #61787d;
+  text-transform: uppercase;
+}
+.quote-payments-totals > span b {
+  font-size: 13.5px;
+}
+.quote-payments-totals > span.received b {
+  color: #0c7a70;
+}
+.quote-payments-totals > span.open b {
+  color: #c2511a;
+}
+.quote-payments-totals > span.settled b {
+  color: #16484e;
+}
+.quote-payments-list {
+  display: grid;
+  gap: 8px;
+}
+.quote-payment-row {
+  padding: 11px 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border: 1px solid #dae6e6;
+  border-radius: 10px;
+  background: #ffffff;
+}
+.quote-payment-row.vencido {
+  border-color: #eabbb1;
+  background: #fff8f6;
+}
+.quote-payment-row > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+.quote-payment-row b {
+  color: #13353b;
+  font-size: 13px;
+}
+.quote-payment-row small {
+  color: #637b80;
+  font-size: 11.5px;
+}
+.quote-payment-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.quote-payment-right strong {
+  color: #103238;
+  font-size: 14px;
+}
+.quote-payment-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.quote-inline-receive {
+  padding: 13px 15px;
+  border: 1px solid #9bd2cb;
+  border-radius: 11px;
+  background: #ffffff;
+  display: grid;
+  gap: 10px;
+}
+.quote-inline-receive-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.quote-inline-receive-head b {
+  color: #11353b;
+  font-size: 13px;
+}
+.quote-inline-receive-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+.quote-inline-receive-grid label {
+  display: grid;
+  gap: 4px;
+  color: #365258;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.quote-inline-receive-grid label.span-2 {
+  grid-column: 1 / -1;
+}
+.quote-inline-receive-grid select {
+  min-height: 36px;
+  padding: 0 9px;
+  border: 1px solid #d2e0e3;
+  border-radius: 7px;
+  background: #ffffff;
+  font-size: 13px;
+}
+.quote-inline-receive-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+@media (max-width: 620px) {
+  .quote-inline-receive-grid {
+    grid-template-columns: 1fr;
+  }
+}

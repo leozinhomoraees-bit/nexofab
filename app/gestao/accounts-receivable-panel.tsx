@@ -21,6 +21,7 @@ const customerAccount = (quote: Quote) => Array.isArray(quote.customers) ? quote
 
 export function AccountsReceivablePanel({ search: globalSearch }: { search: string }) {
   const { notify } = useToast();
+  const [periodMode, setPeriodMode] = useState<"all" | "open" | "month">("all");
   const [month, setMonth] = useState(currentMonth());
   const [items, setItems] = useState<Receivable[]>([]);
   const [status, setStatus] = useState("todos");
@@ -28,19 +29,22 @@ export function AccountsReceivablePanel({ search: globalSearch }: { search: stri
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [receiving, setReceiving] = useState<Receivable | null>(null);
+  const queryUrl = periodMode === "month"
+    ? `/api/financeiro/contas-receber?month=${month}`
+    : `/api/financeiro/contas-receber?scope=${periodMode}`;
   const load = useCallback(async () => {
     setLoading(true);
-    try { const response = await fetch(`/api/financeiro/contas-receber?month=${month}`, { cache: "no-store" }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); setItems(payload.installments); }
+    try { const response = await fetch(queryUrl, { cache: "no-store" }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); setItems(payload.installments); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Não foi possível carregar os recebimentos."); }
     finally { setLoading(false); }
-  }, [month]);
+  }, [queryUrl]);
   useEffect(() => {
     let active = true;
-    fetch(`/api/financeiro/contas-receber?month=${month}`, { cache: "no-store" }).then(async (response) => {
+    fetch(queryUrl, { cache: "no-store" }).then(async (response) => {
       const payload = await response.json(); if (!response.ok) throw new Error(payload.error); return payload;
     }).then((payload) => { if (active) setItems(payload.installments); }).catch((error: Error) => { if (active) setMessage(error.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [month]);
+  }, [queryUrl]);
   const visible = useMemo(() => {
     const query = `${globalSearch} ${localSearch}`.trim().toLocaleLowerCase("pt-BR");
     return items.filter((item) => { const effective = item.status === "pendente" && item.due_date < today() ? "vencido" : item.status; const text = `${item.quotes.customer_name} ${item.quotes.company ?? ""} ${item.quotes.service} ${item.quotes.number}`.toLocaleLowerCase("pt-BR"); return (status === "todos" || status === effective) && (!query || text.includes(query)); });
@@ -114,9 +118,25 @@ export function AccountsReceivablePanel({ search: globalSearch }: { search: stri
   }
 
   return <section className="payables-panel">
-    <div className="payables-toolbar"><div><small>CONTAS A RECEBER</small><h2>Recebimentos de clientes</h2><p>Parcelas são criadas automaticamente quando o orçamento é fechado.</p></div><div className="payables-actions"><label>Competência<Input type="month" value={month} onChange={(event) => setMonth(event.target.value)}/></label><Button variant="outline" onClick={exportReceivablesCsv} disabled={!visible.length}><Download/>CSV</Button><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw/>{loading ? "Atualizando" : "Atualizar"}</Button></div></div>
+    <div className="payables-toolbar">
+      <div>
+        <small>CONTAS A RECEBER & RECIBOS</small>
+        <h2>Recebimentos de clientes</h2>
+        <p>Clique em <b>Receber</b> para dar baixa no pagamento e em <b>Recibo</b> para imprimir ou enviar pelo WhatsApp.</p>
+      </div>
+      <div className="payables-actions">
+        <div className="receivables-scope-toggle" role="group" aria-label="Período de visualização">
+          <button type="button" className={periodMode === "all" ? "active" : ""} onClick={() => setPeriodMode("all")}>Todos os meses</button>
+          <button type="button" className={periodMode === "open" ? "active" : ""} onClick={() => setPeriodMode("open")}>Só em aberto</button>
+          <button type="button" className={periodMode === "month" ? "active" : ""} onClick={() => setPeriodMode("month")}>Por mês</button>
+        </div>
+        {periodMode === "month" && <label>Competência<Input type="month" value={month} onChange={(event) => setMonth(event.target.value)}/></label>}
+        <Button variant="outline" onClick={exportReceivablesCsv} disabled={!visible.length}><Download/>CSV</Button>
+        <Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw/>{loading ? "Atualizando" : "Atualizar"}</Button>
+      </div>
+    </div>
     {message && <div className={message.includes("registrado") ? "finance-message success" : "finance-message"}>{message.includes("registrado") ? <Check/> : <AlertTriangle/>}{message}</div>}
-    <div className="payables-kpis"><article><span><CircleDollarSign/>A receber</span><b>{currency.format(summary.open)}</b><small>Saldo previsto nesta competência</small></article><article className="danger"><span><AlertTriangle/>Em atraso</span><b>{currency.format(summary.overdue)}</b><small>Prioridade de cobrança</small></article><article className="warning"><span><Clock3/>Vence hoje</span><b>{currency.format(summary.today)}</b><small>Confirmar pagamento</small></article><article className="success"><span><Banknote/>Recebido no mês</span><b>{currency.format(summary.received)}</b><small>Integrado ao caixa realizado</small></article></div>
+    <div className="payables-kpis"><article><span><CircleDollarSign/>A receber</span><b>{currency.format(summary.open)}</b><small>{periodMode === "month" ? "Saldo previsto nesta competência" : "Saldo total em aberto"}</small></article><article className="danger"><span><AlertTriangle/>Em atraso</span><b>{currency.format(summary.overdue)}</b><small>Prioridade de cobrança</small></article><article className="warning"><span><Clock3/>Vence hoje</span><b>{currency.format(summary.today)}</b><small>Confirmar pagamento</small></article><article className="success"><span><Banknote/>Recebido</span><b>{currency.format(summary.received)}</b><small>Integrado ao caixa e com recibo</small></article></div>
     {customerStatements.length > 0 && <section className="customer-statements"><header><div><small>CONTAS DE PERÍODO</small><h3>Clientes com fechamento semanal ou mensal</h3></div><span>{customerStatements.length} conta(s) ativa(s)</span></header><div>{customerStatements.map((statement) => <button key={statement.id} type="button" onClick={() => setLocalSearch(statement.name)}><span className={`statement-cycle ${statement.cycle}`}>{statement.cycle}</span><div><b>{statement.name}</b><small>{statement.closeLabel} · {statement.count} lançamento(s) · próximo vencimento {brDate(statement.nextDue)}</small></div><strong>{currency.format(statement.total)}{statement.overdue > 0 && <small>{currency.format(statement.overdue)} vencido</small>}{statement.creditLimit > 0 && <em>{Math.min(statement.total / statement.creditLimit * 100, 999).toFixed(0)}% do limite</em>}</strong></button>)}</div></section>}
     <div className="payables-filters"><label><Search/><Input placeholder="Buscar cliente, serviço ou orçamento" value={localSearch} onChange={(event) => setLocalSearch(event.target.value)}/></label><div>{["todos", "pendente", "agendado", "vencido", "recebido", "cancelado"].map((item) => <button key={item} className={status === item ? "active" : ""} onClick={() => setStatus(item)}>{item}</button>)}</div></div>
     {receiving && <form className="payment-register" onSubmit={receive}><header><div><small>BAIXA DE RECEBIMENTO</small><b>Orçamento #{receiving.quotes.number} · {receiving.quotes.customer_name}</b><span>Parcela {receiving.installment_number} · vencimento {brDate(receiving.due_date)}</span></div><Button type="button" size="icon" variant="ghost" onClick={() => setReceiving(null)}><X/></Button></header><div className="form-grid"><label>Data recebida<Input name="receivedOn" type="date" defaultValue={today()} required/></label><label>Valor recebido<Input name="receivedAmount" type="number" min="0.01" step="0.01" defaultValue={Number(receiving.amount).toFixed(2)} required/></label><label>Forma<select name="paymentMethod" defaultValue={receiving.payment_method}>{Object.entries(paymentLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Conta / caixa<Input name="bankAccount" placeholder="Ex.: Sicredi, dinheiro"/></label><label>Juros<Input name="interest" type="number" min="0" step="0.01" defaultValue="0"/></label><label>Multa<Input name="fine" type="number" min="0" step="0.01" defaultValue="0"/></label><label>Desconto<Input name="discount" type="number" min="0" step="0.01" defaultValue="0"/></label><label className="span-2">Observações<Input name="notes" placeholder="Comprovante, negociação, referência..."/></label></div><div className="payment-register-actions"><Button type="submit"><Check/>Confirmar recebimento</Button></div></form>}

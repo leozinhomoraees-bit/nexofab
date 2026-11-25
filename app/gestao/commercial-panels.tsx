@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Building2, Calculator, CalendarClock, Check, ChevronDown, CircleDollarSign, ClipboardList, Clock3, Columns3, Copy, ExternalLink, Eye, FileText, GripVertical, List, MapPin, MessageCircle, Pencil, Plus, Save, Search, Share2, ShoppingCart, SlidersHorizontal, Sparkles, Trash2, UserRound, Users, X } from "lucide-react";
+import { AlertTriangle, Banknote, Building2, Calculator, CalendarClock, Check, ChevronDown, CircleDollarSign, ClipboardList, Clock3, Columns3, Copy, ExternalLink, Eye, FileText, GripVertical, List, MapPin, MessageCircle, Pencil, Plus, Save, Search, Send, Share2, ShoppingCart, SlidersHorizontal, Sparkles, Trash2, UserRound, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -1021,11 +1021,276 @@ function QuoteShareActions({ quote }: { quote: Quote }) {
   return <div className="quote-share"><div><b>Proposta pública</b><small>O cliente verá apenas informações comerciais e poderá aprovar ou recusar. Copiar o link ou abrir pelo WhatsApp marca a proposta como enviada e ativa o acompanhamento.</small></div>{url && <Input value={url} readOnly aria-label="Link público da proposta"/>}<div className="row-actions"><Button size="sm" onClick={getLink}><Share2/>{url ? "Atualizar link" : "Criar link"}</Button><Button size="sm" variant="outline" onClick={copy}><Copy/>Copiar e acompanhar</Button><Button size="sm" variant="outline" onClick={open}><ExternalLink/>Abrir</Button><Button size="sm" variant="outline" onClick={whatsapp}><MessageCircle/>WhatsApp e acompanhar</Button></div><Feedback message={message}/></div>;
 }
 
-function QuoteDetails({ quote, onClose }: { quote: Quote; onClose: () => void }) {
+type QuoteReceivableInstallment = {
+  id: string;
+  installment_number: number;
+  due_date: string;
+  amount: number;
+  payment_method: string;
+  status: "pendente" | "agendado" | "recebido" | "cancelado";
+  received_on?: string | null;
+  received_amount?: number | null;
+  quote_payment_id?: string | null;
+};
+type QuoteDirectPayment = {
+  id: string;
+  amount: number;
+  payment_method: string;
+  received_on: string;
+  notes?: string | null;
+};
+const paymentMethodLabels: Record<string, string> = { pix: "PIX", dinheiro: "Dinheiro", cartao: "Cartão", boleto: "Boleto", transferencia: "Transferência", outro: "Outro" };
+
+function QuotePaymentsSection({ quote, onChanged, onCloseAndPay }: { quote: Quote; onChanged: () => void; onCloseAndPay: () => void }) {
+  const { notify } = useToast();
+  const [installments, setInstallments] = useState<QuoteReceivableInstallment[]>([]);
+  const [payments, setPayments] = useState<QuoteDirectPayment[]>([]);
+  const [forbidden, setForbidden] = useState(false);
+  const [loading, setLoading] = useState(quote.status === "convertido");
+  const [receiving, setReceiving] = useState<QuoteReceivableInstallment | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [receiptBusyId, setReceiptBusyId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState("");
+
+  const fetchPayments = useCallback(async () => {
+    const response = await fetch(`/api/financeiro/contas-receber?quoteId=${quote.id}`, { cache: "no-store" });
+    if (response.status === 403) return { forbidden: true as const, installments: [] as QuoteReceivableInstallment[], payments: [] as QuoteDirectPayment[] };
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Não foi possível carregar os pagamentos.");
+    return {
+      forbidden: false as const,
+      installments: (payload.installments ?? []) as QuoteReceivableInstallment[],
+      payments: (payload.payments ?? []) as QuoteDirectPayment[],
+    };
+  }, [quote.id]);
+
+  useEffect(() => {
+    if (quote.status !== "convertido") return;
+    let active = true;
+    fetchPayments()
+      .then((res) => {
+        if (!active) return;
+        setForbidden(res.forbidden);
+        setInstallments(res.installments);
+        setPayments(res.payments);
+      })
+      .catch((error: unknown) => {
+        if (active) setFeedback(error instanceof Error ? error.message : "Não foi possível carregar os pagamentos.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, [fetchPayments, quote.status]);
+
+  async function confirmReceive(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!receiving) return;
+    setSaving(true);
+    setFeedback("");
+    const form = new FormData(event.currentTarget);
+    try {
+      const response = await fetch("/api/financeiro/contas-receber", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "receive",
+          installmentId: receiving.id,
+          receivedOn: form.get("receivedOn"),
+          receivedAmount: Number(form.get("receivedAmount")),
+          paymentMethod: form.get("paymentMethod"),
+          bankAccount: form.get("bankAccount"),
+          notes: form.get("notes"),
+          interest: 0,
+          fine: 0,
+          discount: 0,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Não foi possível registrar o recebimento.");
+      setReceiving(null);
+      const refreshed = await fetchPayments();
+      setInstallments(refreshed.installments);
+      setPayments(refreshed.payments);
+      setFeedback("OK:Pagamento registrado! O recibo já está pronto para emitir.");
+      notify("Pagamento registrado com sucesso!", "success");
+      onChanged();
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Não foi possível registrar o recebimento.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function issueReceipt(paymentId: string, amount: number, sendViaWhatsApp: boolean) {
+    setReceiptBusyId(paymentId);
+    setFeedback("");
+    try {
+      const response = await fetch("/api/financeiro/recibos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentId }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Não foi possível emitir o recibo.");
+      const receiptUrl = `${window.location.origin}${payload.path}`;
+      if (sendViaWhatsApp) {
+        const destination = whatsappUrl(
+          quote.phone,
+          `Olá, ${quote.customerName}! Segue o recibo de ${currency.format(amount)} referente ao orçamento #${quote.number} (${quote.service}): ${receiptUrl}`,
+        );
+        if (!destination) {
+          setFeedback("Cadastre um WhatsApp válido no cliente antes de enviar o recibo.");
+          return;
+        }
+        window.open(destination, "_blank", "noopener,noreferrer");
+      } else {
+        window.open(receiptUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Não foi possível emitir o recibo.");
+    } finally {
+      setReceiptBusyId(null);
+    }
+  }
+
+  if (quote.status === "aprovado") {
+    return (
+      <section className="quote-payments-box pending-close">
+        <div>
+          <small>PRÓXIMO PASSO · PAGAMENTO E OS</small>
+          <b>Proposta aprovada aguardando fechamento</b>
+          <p>Registre a entrada ou parcelamento para gerar a OS, liberar o Contas a Receber e emitir recibos.</p>
+        </div>
+        <Button type="button" size="sm" onClick={onCloseAndPay}>
+          <Banknote />Fechar e registrar pagamento
+        </Button>
+      </section>
+    );
+  }
+
+  if (quote.status !== "convertido" || forbidden) return null;
+
+  const linkedPaymentIds = new Set(installments.map((item) => item.quote_payment_id).filter(Boolean));
+  const standalonePayments = payments.filter((pay) => !linkedPaymentIds.has(pay.id));
+  const receivedTotal =
+    installments
+      .filter((item) => item.status === "recebido")
+      .reduce((sum, item) => sum + Number(item.received_amount ?? item.amount), 0) +
+    standalonePayments.reduce((sum, pay) => sum + Number(pay.amount), 0);
+  const openTotal = installments
+    .filter((item) => ["pendente", "agendado"].includes(item.status))
+    .reduce((sum, item) => sum + Number(item.amount), 0);
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  return (
+    <section className="quote-payments-box">
+      <header>
+        <div>
+          <small>FINANCEIRO DO PEDIDO</small>
+          <h3>Pagamentos e recibos</h3>
+        </div>
+        <div className="quote-payments-totals">
+          <span className="received"><small>Recebido</small><b>{currency.format(receivedTotal)}</b></span>
+          <span className={openTotal > 0 ? "open" : "settled"}><small>Em aberto</small><b>{currency.format(openTotal)}</b></span>
+        </div>
+      </header>
+
+      <Feedback message={feedback} />
+
+      {receiving && (
+        <form className="quote-inline-receive" onSubmit={confirmReceive}>
+          <div className="quote-inline-receive-head">
+            <b>Confirmar recebimento — {receiving.installment_number === 0 ? "Entrada" : `Parcela ${receiving.installment_number}`}</b>
+            <Button type="button" size="icon" variant="ghost" onClick={() => setReceiving(null)}><X /></Button>
+          </div>
+          <div className="quote-inline-receive-grid">
+            <label>Data recebida<Input name="receivedOn" type="date" defaultValue={todayIso} required /></label>
+            <label>Valor recebido<Input name="receivedAmount" type="number" min="0.01" step="0.01" defaultValue={Number(receiving.amount).toFixed(2)} required /></label>
+            <label>Forma<select name="paymentMethod" defaultValue={receiving.payment_method}>{Object.entries(paymentMethodLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <label>Conta / caixa<Input name="bankAccount" placeholder="Ex.: PIX, Sicredi, caixa" /></label>
+            <label className="span-2">Observação<Input name="notes" placeholder="Opcional" /></label>
+          </div>
+          <div className="quote-inline-receive-actions">
+            <Button type="button" size="sm" variant="outline" onClick={() => setReceiving(null)}>Cancelar</Button>
+            <Button type="submit" size="sm" disabled={saving}><Check />{saving ? "Registrando..." : "Confirmar recebimento"}</Button>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <p className="detail-empty">Carregando pagamentos…</p>
+      ) : installments.length === 0 && standalonePayments.length === 0 ? (
+        <p className="detail-empty">Nenhum lançamento financeiro vinculado a este orçamento.</p>
+      ) : (
+        <div className="quote-payments-list">
+          {standalonePayments.map((pay) => (
+            <article key={pay.id} className="quote-payment-row received">
+              <div>
+                <span className="status-pill recebido">Recebido</span>
+                <b>Entrada / pagamento direto · {paymentMethodLabels[pay.payment_method] ?? pay.payment_method}</b>
+                <small>Pago em {date(pay.received_on)}{pay.notes ? ` · ${pay.notes}` : ""}</small>
+              </div>
+              <div className="quote-payment-right">
+                <strong>{currency.format(Number(pay.amount))}</strong>
+                <div className="quote-payment-actions">
+                  <Button type="button" size="sm" variant="outline" disabled={receiptBusyId === pay.id} onClick={() => void issueReceipt(pay.id, Number(pay.amount), false)}>
+                    <FileText />Recibo
+                  </Button>
+                  <Button type="button" size="sm" disabled={receiptBusyId === pay.id} onClick={() => void issueReceipt(pay.id, Number(pay.amount), true)}>
+                    <Send />WhatsApp
+                  </Button>
+                </div>
+              </div>
+            </article>
+          ))}
+
+          {installments.map((item) => {
+            const overdue = item.status === "pendente" && item.due_date < todayIso;
+            const effectiveStatus = overdue ? "vencido" : item.status;
+            const value = Number(item.status === "recebido" ? item.received_amount ?? item.amount : item.amount);
+            return (
+              <article key={item.id} className={`quote-payment-row ${effectiveStatus}`}>
+                <div>
+                  <span className={`status-pill ${effectiveStatus}`}>{effectiveStatus}</span>
+                  <b>{item.installment_number === 0 ? "Entrada" : `Parcela ${item.installment_number}`} · {paymentMethodLabels[item.payment_method] ?? item.payment_method}</b>
+                  <small>{item.status === "recebido" ? `Recebido em ${date(item.received_on)}` : `Vencimento ${date(item.due_date)}`}</small>
+                </div>
+                <div className="quote-payment-right">
+                  <strong>{currency.format(value)}</strong>
+                  <div className="quote-payment-actions">
+                    {item.status === "recebido" ? (
+                      item.quote_payment_id ? (
+                        <>
+                          <Button type="button" size="sm" variant="outline" disabled={receiptBusyId === item.quote_payment_id} onClick={() => void issueReceipt(item.quote_payment_id!, value, false)}>
+                            <FileText />Recibo
+                          </Button>
+                          <Button type="button" size="sm" disabled={receiptBusyId === item.quote_payment_id} onClick={() => void issueReceipt(item.quote_payment_id!, value, true)}>
+                            <Send />WhatsApp
+                          </Button>
+                        </>
+                      ) : <small>Sem recibo vinculado</small>
+                    ) : item.status !== "cancelado" ? (
+                      <Button type="button" size="sm" onClick={() => setReceiving(item)}>
+                        <Banknote />Receber
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function QuoteDetails({ quote, onClose, onPaymentUpdated, onCloseAndPay }: { quote: Quote; onClose: () => void; onPaymentUpdated: () => void; onCloseAndPay: () => void }) {
   const cost = quoteCostItems(quote.items).reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_cost), 0);
   const total = Number(quote.estimatedValue ?? 0);
   const margin = total ? ((total - cost) / total) * 100 : 0;
-  return <section className="quote-detail"><header><div><span className={`status-pill status-${quote.status}`}>{statusLabel[quote.status] ?? quote.status}</span><h2>Orçamento #{quote.number}</h2><p>{quote.company || quote.customerName} · {quote.service}</p></div><Button variant="ghost" size="icon" onClick={onClose}><X/></Button></header>{Boolean(quote.viewCount) && <div className="quote-view-banner"><Eye/><div><b>Proposta visualizada {quote.viewCount} {quote.viewCount === 1 ? "vez" : "vezes"} pelo cliente</b><small>Última abertura em {showApprovalDate(quote.lastViewedAt)}{quote.firstViewedAt && quote.firstViewedAt !== quote.lastViewedAt ? ` · primeira em ${showApprovalDate(quote.firstViewedAt)}` : ""}</small></div></div>}{quote.approvalVersions.length > 0 && <div className="approval-history"><Check/><div><b>{quote.approvalVersions.length} versão(ões) aprovada(s) preservada(s)</b><small>Cada aprovação permanece imutável, mesmo depois de uma nova revisão.</small><span>{quote.approvalVersions.map((version) => <Button key={version.id} size="sm" variant="outline" onClick={() => window.open(`/api/gestao/orcamentos/versao/${version.id}`, "_blank", "noopener,noreferrer")}><FileText/>Versão {version.version} · {showApprovalDate(version.approved_at)}</Button>)}</span></div></div>}<div className="quote-detail-metrics"><article><span>Total</span><b>{currency.format(total)}</b></article><article><span>Custo previsto</span><b>{currency.format(cost)}</b></article><article><span>Margem bruta</span><b>{margin.toFixed(1)}%</b></article><article><span>Validade</span><b>{date(quote.validUntil)}</b></article></div><QuoteShareActions quote={quote}/><div className="quote-detail-grid"><div><h3>Itens</h3>{quote.items.length ? <div className="detail-items">{quote.items.map((item, index) => <article key={item.id ?? index}><div><b>{item.description}</b><small>{item.material || item.service_type || "Sem material definido"}{item.width_mm && item.height_mm ? ` · ${item.width_mm} × ${item.height_mm} mm` : ""}</small></div><span>{item.quantity} {item.unit}</span><strong>{currency.format(Number(item.total ?? item.quantity * item.unit_price))}</strong></article>)}</div> : <p className="detail-empty">Solicitação recebida sem composição de itens.</p>}</div><aside><h3>Condições</h3><dl><div><dt>Origem</dt><dd>{sourceLabel[quote.source] ?? quote.source}</dd></div><div><dt>Prazo</dt><dd>{quote.deliveryDays ? `${quote.deliveryDays} dias` : "A definir"}</dd></div><div><dt>Instalação</dt><dd>{quote.installationIncluded ? "Inclusa" : "Não inclusa"}</dd></div><div><dt>Pagamento</dt><dd>{quote.paymentTerms || "A definir"}</dd></div><div><dt>Contato</dt><dd>{quote.phone}</dd></div></dl></aside></div>{quote.details && <div className="quote-notes"><b>Escopo / observações</b><p>{quote.details}</p></div>}</section>;
+  return <section className="quote-detail"><header><div><span className={`status-pill status-${quote.status}`}>{statusLabel[quote.status] ?? quote.status}</span><h2>Orçamento #{quote.number}</h2><p>{quote.company || quote.customerName} · {quote.service}</p></div><Button variant="ghost" size="icon" onClick={onClose}><X/></Button></header>{Boolean(quote.viewCount) && <div className="quote-view-banner"><Eye/><div><b>Proposta visualizada {quote.viewCount} {quote.viewCount === 1 ? "vez" : "vezes"} pelo cliente</b><small>Última abertura em {showApprovalDate(quote.lastViewedAt)}{quote.firstViewedAt && quote.firstViewedAt !== quote.lastViewedAt ? ` · primeira em ${showApprovalDate(quote.firstViewedAt)}` : ""}</small></div></div>}{quote.approvalVersions.length > 0 && <div className="approval-history"><Check/><div><b>{quote.approvalVersions.length} versão(ões) aprovada(s) preservada(s)</b><small>Cada aprovação permanece imutável, mesmo depois de uma nova revisão.</small><span>{quote.approvalVersions.map((version) => <Button key={version.id} size="sm" variant="outline" onClick={() => window.open(`/api/gestao/orcamentos/versao/${version.id}`, "_blank", "noopener,noreferrer")}><FileText/>Versão {version.version} · {showApprovalDate(version.approved_at)}</Button>)}</span></div></div>}<div className="quote-detail-metrics"><article><span>Total</span><b>{currency.format(total)}</b></article><article><span>Custo previsto</span><b>{currency.format(cost)}</b></article><article><span>Margem bruta</span><b>{margin.toFixed(1)}%</b></article><article><span>Validade</span><b>{date(quote.validUntil)}</b></article></div><QuotePaymentsSection quote={quote} onChanged={onPaymentUpdated} onCloseAndPay={onCloseAndPay}/><QuoteShareActions quote={quote}/><div className="quote-detail-grid"><div><h3>Itens</h3>{quote.items.length ? <div className="detail-items">{quote.items.map((item, index) => <article key={item.id ?? index}><div><b>{item.description}</b><small>{item.material || item.service_type || "Sem material definido"}{item.width_mm && item.height_mm ? ` · ${item.width_mm} × ${item.height_mm} mm` : ""}</small></div><span>{item.quantity} {item.unit}</span><strong>{currency.format(Number(item.total ?? item.quantity * item.unit_price))}</strong></article>)}</div> : <p className="detail-empty">Solicitação recebida sem composição de itens.</p>}</div><aside><h3>Condições</h3><dl><div><dt>Origem</dt><dd>{sourceLabel[quote.source] ?? quote.source}</dd></div><div><dt>Prazo</dt><dd>{quote.deliveryDays ? `${quote.deliveryDays} dias` : "A definir"}</dd></div><div><dt>Instalação</dt><dd>{quote.installationIncluded ? "Inclusa" : "Não inclusa"}</dd></div><div><dt>Pagamento</dt><dd>{quote.paymentTerms || "A definir"}</dd></div><div><dt>Contato</dt><dd>{quote.phone}</dd></div></dl></aside></div>{quote.details && <div className="quote-notes"><b>Escopo / observações</b><p>{quote.details}</p></div>}</section>;
 }
 
 const quoteKanbanColumns = [
@@ -1218,7 +1483,7 @@ export function QuotesPanel({ search, composerRequest = 0, requestedQuoteId, quo
     {quickSaleOpen ? <div className="workspace-modal" role="dialog" aria-modal="true" aria-label="Registrar venda rápida" onMouseDown={(event) => { if (event.target === event.currentTarget) setQuickSaleOpen(false); }}><div className="workspace-dialog quick-sale-dialog"><QuickSaleForm customers={customers} catalog={catalog} onClose={() => setQuickSaleOpen(false)} onSaved={(number) => { setQuickSaleOpen(false); load(); setFilter("convertido"); setMessage(`OK:Venda rápida${number ? ` #${number}` : ""} registrada no financeiro, histórico e relatórios.`); }}/></div></div> : null}
     {closing ? <div className="workspace-modal" role="dialog" aria-modal="true" aria-label={`Fechar orçamento ${closing.number}`} onMouseDown={(event) => { if (event.target === event.currentTarget) setClosing(null); }}><div className="workspace-dialog compact"><CloseQuoteForm quote={closing} customer={customers.find((customer) => customer.id === closing.customerId)} onClose={() => setClosing(null)} onSaved={() => { setClosing(null); load(); setMessage("OK:Orçamento fechado, recebimento registrado e ordem de produção criada."); }}/></div></div> : null}
     {revalidating ? <div className="workspace-modal" role="dialog" aria-modal="true" aria-label={`Revalidar orçamento ${revalidating.number}`} onMouseDown={(event) => { if (event.target === event.currentTarget) setRevalidating(null); }}><div className="workspace-dialog compact"><RevalidateQuoteForm quote={revalidating} onClose={() => setRevalidating(null)} onSaved={() => { setRevalidating(null); load(); setMessage("OK:Orçamento revalidado. O mesmo link público já está disponível ao cliente."); }}/></div></div> : null}
-    {details ? <div className="workspace-modal" role="dialog" aria-modal="true" aria-label={`Detalhes do orçamento ${details.number}`} onMouseDown={(event) => { if (event.target === event.currentTarget) setDetails(null); }}><div className="workspace-dialog"><QuoteDetails quote={details} onClose={() => setDetails(null)}/></div></div> : null}
+    {details ? <div className="workspace-modal" role="dialog" aria-modal="true" aria-label={`Detalhes do orçamento ${details.number}`} onMouseDown={(event) => { if (event.target === event.currentTarget) setDetails(null); }}><div className="workspace-dialog"><QuoteDetails quote={details} onClose={() => setDetails(null)} onPaymentUpdated={() => void load()} onCloseAndPay={() => { const current = details; setDetails(null); setClosing(current); }}/></div></div> : null}
     <div className="table-toolbar quote-table-toolbar"><div><label>Status<select value={filter} onChange={(event) => { const next = event.target.value; setFilter(next); if (["recusado", "expirado"].includes(next)) switchView("table"); }}><option value="abertos">Em aberto</option><option value="carteira">Carteira ativa</option><option value="todos">Todos</option><option value="novo">Novos</option><option value="em_analise">Em análise</option><option value="aguardando_cliente">Aguardando cliente</option><option value="aprovado">Aprovados</option><option value="convertido">Fechados</option><option value="recusado">Recusados</option><option value="expirado">Expirados</option></select></label><label className="quote-search-field"><Search/><Input type="search" value={quoteSearch} onChange={(event) => setQuoteSearch(event.target.value)} placeholder="Pesquisar nº, cliente, telefone, projeto ou item" aria-label="Pesquisar orçamentos"/>{quoteSearch && <button type="button" aria-label="Limpar pesquisa de orçamentos" onClick={() => setQuoteSearch("")}><X/></button>}</label><div className="view-mode-toggle" role="group" aria-label="Modo de visualização dos orçamentos"><button type="button" className={viewMode === "kanban" ? "active" : ""} onClick={() => switchView("kanban")}><Columns3/>Funil Kanban</button><button type="button" className={viewMode === "table" ? "active" : ""} onClick={() => switchView("table")}><List/>Tabela</button></div></div><span>{viewMode === "kanban" ? kanbanQuotes.length : filtered.length} resultado(s)</span></div>
     {!loading && !(viewMode === "kanban" ? kanbanQuotes.length : filtered.length) ? <EmptyState icon={ClipboardList} title="Nenhum orçamento neste filtro" text="Crie uma proposta detalhada ou altere o filtro para consultar o histórico comercial."/> : viewMode === "kanban" ? (
       <div className="pcp-kanban-board quote-kanban-board" role="region" aria-label="Funil Kanban de Orçamentos">
