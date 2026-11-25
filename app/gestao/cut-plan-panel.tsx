@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { contoursToParts, exportCutPlanDxf, transformContour, type CutPart, type CutPlan } from "@/lib/cut-plan";
 import type { CutPlanQuotePrefill } from "@/lib/cut-plan-quote";
+import { QuickRectNesting } from "./quick-rect-nesting";
 
 type Material = { id: string; name: string; category: string; format: string; package_cost: number; purchase_quantity: number; width_mm?: number | null; height_mm?: number | null; thickness_mm?: number | null; inventory?: { current_quantity: number; unit: string } | null };
 type Machine = { id: string; name: string; machine_type: string; purchase_cost: number; residual_value: number; useful_life_months: number; productive_hours_month: number; maintenance_monthly: number; power_kw: number; setup_minutes: number; minimum_minutes: number; pricing_machine_consumables?: Array<{ calculation_basis: string; replacement_cost: number; useful_life_hours?: number | null; useful_life_months?: number | null }> };
@@ -61,6 +62,7 @@ function machineHourlyCost(machine: Machine | undefined, catalog: Catalog) {
 }
 
 export function CutPlanPanel({ onBuildQuote }: { onBuildQuote: (prefill: CutPlanQuotePrefill) => void }) {
+  const [tab, setTab] = useState<"quick" | "vector">("quick");
   const [catalog, setCatalog] = useState<Catalog>({ materials: [], machines: [] });
   const [fileName, setFileName] = useState("");
   const [parts, setParts] = useState<CutPart[]>([]);
@@ -173,7 +175,24 @@ export function CutPlanPanel({ onBuildQuote }: { onBuildQuote: (prefill: CutPlan
   }
 
   return <>
-    <header className="module-heading"><div><p>DXF · RDWORKS · ASPIRE</p><h1>Plano de corte inteligente</h1><span>Importe vetores, confira a escala e gere um encaixe seguro para laser ou router.</span></div></header>
+    <header className="module-heading no-print"><div><p>APROVEITAMENTO · CHAPA · BOBINA · DXF</p><h1>Plano de corte inteligente</h1><span>Simule o encaixe visual por medida (chapas e bobinas) em segundos ou importe arquivos vetoriais DXF/SVG.</span></div></header>
+    <div className="attendance-tabs no-print">
+      <button type="button" className={tab === "quick" ? "active" : ""} onClick={() => setTab("quick")}>
+        <Layers3 />
+        Encaixe rápido por medida (Chapa / Bobina)
+      </button>
+      <button type="button" className={tab === "vector" ? "active" : ""} onClick={() => setTab("vector")}>
+        <FileUp />
+        Importar vetor DXF / SVG (Laser / Router)
+      </button>
+    </div>
+    {tab === "quick" ? (
+      <QuickRectNesting
+        materials={catalog.materials}
+        targetMargin={number(catalog.settings?.target_margin_percent) || 30}
+        onBuildQuote={onBuildQuote}
+      />
+    ) : <>
     <section className="cut-plan-flow">
       <article className="cut-plan-upload"><span><FileUp/></span><div><small>01 · ARQUIVO VETORIAL</small><h2>Solte ou selecione o arquivo de corte</h2><p>DXF e SVG são processados agora. PDF vetorial e EPS entram na próxima etapa de conversão normalizada.</p><label><input type="file" accept=".dxf,.svg,.pdf,.eps,application/dxf,image/svg+xml,application/pdf" onChange={readFile}/><FileUp/>{fileName || "Escolher DXF, SVG, PDF ou EPS"}</label></div></article>
       <article className="cut-plan-settings"><header><small>02 · PROCESSO E MATERIAL</small><h2>Parâmetros de produção</h2></header><div className="cut-plan-process"><button type="button" className={process === "laser" ? "active" : ""} onClick={() => changeProcess("laser")}><Scissors/><b>Laser</b><small>Saída para RDWorks</small></button><button type="button" className={process === "router_cnc" ? "active" : ""} onClick={() => changeProcess("router_cnc")}><Gauge/><b>Router CNC</b><small>Saída para Aspire</small></button></div><div className="cut-plan-form">
@@ -188,5 +207,6 @@ export function CutPlanPanel({ onBuildQuote }: { onBuildQuote: (prefill: CutPlan
     {message && <div className={`module-feedback ${message.startsWith("OK:") ? "success" : ""}`}>{message.startsWith("OK:") ? <CheckCircle2/> : <AlertTriangle/>}{message.replace(/^OK:/, "")}</div>}
     {(parts.length > 0 || parseWarnings.length > 0) && <section className="cut-plan-file-audit"><header><div><small>LEITURA DO ARQUIVO</small><h2>{fileName}</h2></div><span>{parts.length} peça(s)</span></header>{parts.length > 0 && <div className="cut-plan-parts">{parts.slice(0, 12).map((part) => <span key={part.id}><b>{part.name}</b><small>{decimal.format(part.width)} × {decimal.format(part.height)} mm · corte {decimal.format(part.cutLength / 1000)} m</small></span>)}</div>}{parseWarnings.map((warning) => <p key={warning}><AlertTriangle/>{warning}</p>)}</section>}
     {plan && <section className="cut-plan-result"><header><div><small>{plan === bestPlan ? "MELHOR RESULTADO" : "ALTERNATIVA ATUAL"} · {attemptCount} TENTATIVA(S)</small><h2>{plan.sheets} chapa(s) · {decimal.format(plan.utilisation)}% de aproveitamento</h2></div><div className="cut-plan-result-actions">{bestPlan && plan !== bestPlan && <Button type="button" variant="outline" onClick={() => { setPlan(bestPlan); setMessage("OK:Melhor resultado restaurado."); }}><CheckCircle2/>Voltar ao melhor</Button>}<Button type="button" variant="outline" onClick={() => calculate(true)} disabled={calculating}><RefreshCw className={calculating ? "spin" : ""}/>{calculating ? "Tentando outra estratégia..." : "Tentar outro encaixe"}</Button><Button type="button" onClick={buildQuote}><ClipboardList/>Montar orçamento</Button><Button type="button" onClick={downloadDxf}><Download/>Baixar DXF encaixado</Button></div></header><div className="cut-plan-kpis"><span><Layers3/><small>CHAPAS</small><b>{plan.sheets}</b></span><span><Ruler/><small>LINHA DE CORTE</small><b>{decimal.format(plan.totalCutLength / 1000)} m</b></span><span><Gauge/><small>TEMPO ESTIMADO</small><b>{decimal.format(plan.estimatedMinutes)} min</b></span><span><Settings2/><small>CUSTO TÉCNICO</small><b>{money.format(estimatedCost)}</b></span></div><div className="cut-plan-preview">{Array.from({ length: plan.sheets }, (_, sheet) => { const width = number(sheetWidth), height = number(sheetHeight), gridId = `cut-grid-${sheet}`; return <figure key={sheet} className={height > width ? "portrait" : "landscape"}><figcaption><span>Chapa {sheet + 1}</span><b>{width} × {height} mm</b></figcaption><div className="cut-plan-sheet-frame"><svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={{ aspectRatio: `${width} / ${height}` }} role="img" aria-label={`Plano de corte da chapa ${sheet + 1}`}><defs><pattern id={gridId} width="100" height="100" patternUnits="userSpaceOnUse"><path d="M 100 0 L 0 0 0 100"/></pattern></defs><rect className="sheet-background" width={width} height={height}/><rect className="sheet-grid" width={width} height={height} fill={`url(#${gridId})`}/><rect className="sheet-margin" x={number(margin)} y={number(margin)} width={Math.max(0, width - number(margin) * 2)} height={Math.max(0, height - number(margin) * 2)}/><g transform={`translate(0 ${height}) scale(1 -1)`}>{plan.placements.filter((item) => item.sheet === sheet).flatMap((placement) => placement.part.contours.map((contour, index) => <polygon key={`${placement.part.id}-${index}`} points={transformContour(contour, placement).map((point) => `${point.x},${point.y}`).join(" ")} className={index === 0 ? "outer" : "hole"}/>))}</g></svg></div><div className="cut-plan-sheet-legend"><span><i/>Área útil</span><span>Margem {margin} mm</span><span>Origem 0,0</span></div></figure>; })}</div><p className="cut-plan-safety"><AlertTriangle/><span><b>Conferência obrigatória:</b> abra o DXF no RDWorks ou Aspire, confirme unidade em milímetros, origem, compensação da ferramenta, ordem de corte e parâmetros da máquina antes de produzir.</span></p></section>}
+    </>}
   </>;
 }

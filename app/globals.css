@@ -2571,6 +2571,354 @@ main.min-h-screen, main.min-h-screen * { font-family:"Sora",sans-serif; }
   }
 }
 
+/* 12. Encaixe Rápido por Medida (Chapa/Bobina) e Etiquetas de Volume */
+.rect-nesting-workspace {
+  margin-top: 16px;
+  display: grid;
+  gap: 18px;
+}
+.rect-nesting-setup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 16px;
+  align-items: start;
+}
+.rect-nesting-card {
+  padding: 20px 22px;
+  border: 1px solid #e1eaec;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(8, 25, 39, 0.035), 0 8px 24px rgba(8, 25, 39, 0.035);
+  display: grid;
+  gap: 14px;
+}
+.rect-nesting-card>header small {
+  color: #0d857b;
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+.rect-nesting-card>header h2 {
+  margin: 3px 0 0;
+  color: #102a33;
+  font-size: 17px;
+  font-weight: 800;
+}
+.rect-nesting-card .span-full {
+  grid-column: 1 / -1;
+}
+.rect-nesting-card .inline-icon {
+  width: 13px;
+  height: 13px;
+  display: inline-block;
+  vertical-align: -2px;
+  margin-right: 4px;
+  color: #0d857b;
+}
+.rect-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rect-presets button {
+  min-height: 29px;
+  padding: 0 10px;
+  border: 1px solid #d5e4e6;
+  border-radius: 999px;
+  background: #f5fafb;
+  color: #244750;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.rect-presets button:hover {
+  border-color: #0e8b81;
+  background: #e9f7f5;
+  color: #0a6e66;
+}
+.rect-pieces-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.rect-piece-rows {
+  display: grid;
+  gap: 10px;
+}
+.rect-piece-row {
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: 14px minmax(110px, 1.4fr) repeat(3, minmax(64px, 0.72fr)) 32px;
+  align-items: end;
+  gap: 8px;
+  border: 1px solid #e2ecef;
+  border-radius: 10px;
+  background: #f9fcfc;
+}
+.rect-piece-swatch {
+  width: 12px;
+  height: 36px;
+  border-radius: 4px;
+  border: 1.5px solid;
+  display: block;
+}
+.rect-piece-row label {
+  display: grid;
+  gap: 4px;
+  color: #4f6970;
+  font-size: 11px;
+  font-weight: 700;
+}
+.rect-piece-del {
+  width: 32px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e0e8ea;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #8c4536;
+  cursor: pointer;
+}
+.rect-piece-del:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.rect-piece-del:hover:not(:disabled) {
+  border-color: #e4a395;
+  background: #fff1ee;
+}
+.rect-piece-del svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Modal de Etiquetas de Volume */
+.shipping-label-modal {
+  width: min(760px, 96vw);
+  overflow: hidden;
+  border: 1px solid #d5e5e7;
+  border-radius: 16px;
+  background: #ffffff;
+  color: #102a33;
+  box-shadow: 0 28px 90px rgba(6, 21, 29, 0.42);
+}
+.shipping-label-modal>header {
+  padding: 18px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #e4eeef;
+  background: linear-gradient(120deg, #f3faf9, #ffffff);
+}
+.shipping-label-modal>header small {
+  color: #0d857b;
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+.shipping-label-modal>header h2 {
+  margin: 3px 0 0;
+  font-size: 20px;
+  font-weight: 800;
+}
+.shipping-label-body {
+  padding: 20px 22px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 18px;
+  align-items: start;
+}
+.shipping-label-controls {
+  display: grid;
+  gap: 14px;
+}
+.shipping-label-controls>label {
+  display: grid;
+  gap: 6px;
+  color: #36525a;
+  font-size: 12px;
+  font-weight: 800;
+}
+.shipping-vol-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.shipping-vol-row input {
+  width: 78px;
+}
+.shipping-vol-row button,
+.shipping-format-row button,
+.shipping-presets button {
+  min-height: 34px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #d4e3e5;
+  border-radius: 8px;
+  background: #f7fbfb;
+  color: #2f4e56;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.shipping-vol-row button.active,
+.shipping-format-row button.active {
+  border-color: #081927;
+  background: #081927;
+  color: #c6f054;
+}
+.shipping-format-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.shipping-format-row button svg {
+  width: 14px;
+  height: 14px;
+}
+.shipping-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.shipping-presets button {
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 10.5px;
+}
+.shipping-label-preview {
+  display: grid;
+  gap: 8px;
+}
+.shipping-label-preview>small {
+  color: #607a81;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+.shipping-preview-card {
+  padding: 14px;
+  border: 2px solid #081927;
+  border-radius: 10px;
+  background: #ffffff;
+  display: grid;
+  gap: 10px;
+}
+.shipping-preview-top {
+  padding-bottom: 8px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 2px solid #081927;
+}
+.shipping-preview-top>div {
+  display: grid;
+}
+.shipping-preview-top>div small {
+  color: #0d857b;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+.shipping-preview-top>div b {
+  font-size: 22px;
+  line-height: 1.05;
+  color: #081927;
+}
+.shipping-preview-top>span {
+  padding: 5px 10px;
+  border-radius: 7px;
+  background: #081927;
+  color: #ffffff;
+  text-align: center;
+  display: grid;
+}
+.shipping-preview-top>span small {
+  color: #c6f054;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+.shipping-preview-top>span strong {
+  font-size: 15px;
+  font-weight: 900;
+}
+.shipping-preview-mid {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.shipping-preview-mid>div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.shipping-preview-mid b {
+  font-size: 13.5px;
+  color: #081927;
+}
+.shipping-preview-mid small {
+  color: #5b737a;
+  font-size: 11px;
+}
+.shipping-preview-mid p {
+  margin: 4px 0 0;
+  color: #13313a;
+  font-size: 12px;
+  font-weight: 700;
+}
+.shipping-preview-mid span {
+  color: #597279;
+  font-size: 11px;
+}
+.shipping-preview-mid img {
+  border: 1px solid #d5e2e5;
+  border-radius: 6px;
+  padding: 2px;
+}
+.shipping-preview-note {
+  padding: 6px 8px;
+  border: 1.5px solid #081927;
+  border-radius: 6px;
+  background: #f2f6f7;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+.shipping-label-modal>footer {
+  padding: 14px 22px;
+  min-height: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid #e4eeef;
+  background: #f7fbfb !important;
+}
+@media(max-width:960px) {
+  .rect-nesting-setup,
+  .shipping-label-body {
+    grid-template-columns: 1fr;
+  }
+}
+@media(max-width:620px) {
+  .rect-piece-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .rect-piece-swatch {
+    display: none;
+  }
+}
+
 /* Melhorias mobile para chão de fábrica (Produção, Estoque, Orçamentos e Financeiro) */
 @media(max-width:768px){
   .dash-main { padding:18px 14px 36px; }
