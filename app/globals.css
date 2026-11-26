@@ -3417,6 +3417,46 @@ main.min-h-screen, main.min-h-screen * { font-family:"Sora",sans-serif; }
 .cut-plan-preview svg g {
   cursor: pointer;
 }
+.cut-plan-offcut-bar.retalhos {
+  margin-top: 6px;
+}
+.cut-plan-usage-pill {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #fff3ea;
+  border: 1px solid #f0c9ad;
+  color: #a84817;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+.cut-plan-preview svg .cut-ruler line {
+  stroke: #768f94;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.cut-plan-preview svg .cut-ruler text {
+  fill: #4b676d;
+  font-weight: 700;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+.cut-plan-preview svg .cut-ruler .cut-ruler-unit {
+  fill: #0e8b81;
+  font-weight: 900;
+}
+.cut-plan-preview svg .cut-used-guide line,
+.cut-plan-preview svg .cut-used-guide-x line {
+  stroke: #e05a2b;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.cut-plan-preview svg .cut-used-guide text {
+  fill: #c44a1c;
+  font-weight: 800;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
 
 /* ==========================================================================
    Agenda de Instalações, Entregas & Retiradas (Produção / Campo)

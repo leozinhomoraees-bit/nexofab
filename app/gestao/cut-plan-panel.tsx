@@ -24,6 +24,7 @@ import {
   contoursToParts,
   exportCutPlanDxf,
   exportCutPlanSvg,
+  getRotatedPartSize,
   scaleCutParts,
   transformContour,
   type CutPart,
@@ -44,12 +45,35 @@ const SCALE_OPTIONS: Array<{ id: ScaleUnit; label: string; factor: number; hint:
   { id: "in", label: "Polegadas (×25,4)", factor: 25.4, hint: "Padrão imperial / DXF EUA" },
 ];
 
-const OFFCUT_PRESETS = [
-  { label: "600 × 400", w: "600", h: "400" },
-  { label: "1000 × 600", w: "1000", h: "600" },
-  { label: "1200 × 800", w: "1200", h: "800" },
-  { label: "1500 × 1000", w: "1500", h: "1000" },
+const SHEET_PRESETS = [
+  { label: "PVC / PS 1,22×2,44 m", w: "1220", h: "2440", name: "Chapa PVC / PS 1220 × 2440 mm" },
+  { label: "ACM 1,22×5,00 m", w: "1220", h: "5000", name: "Chapa ACM 1220 × 5000 mm" },
+  { label: "Acrílico 1,00×2,00 m", w: "1000", h: "2000", name: "Chapa Acrílico 1000 × 2000 mm" },
+  { label: "MDF 1,85×2,75 m", w: "1850", h: "2750", name: "Chapa MDF 1850 × 2750 mm" },
+  { label: "MDF Laser 60×90 cm", w: "600", h: "900", name: "Chapa MDF Laser 600 × 900 mm" },
+  { label: "Galvanizado 1,20×2,00 m", w: "1200", h: "2000", name: "Chapa Galvanizada 1200 × 2000 mm" },
 ];
+
+const OFFCUT_PRESETS = [
+  { label: "60 × 40 cm", w: "600", h: "400", name: "Retalho 600 × 400 mm" },
+  { label: "100 × 60 cm", w: "1000", h: "600", name: "Retalho 1000 × 600 mm" },
+  { label: "120 × 80 cm", w: "1200", h: "800", name: "Retalho 1200 × 800 mm" },
+  { label: "150 × 100 cm", w: "1500", h: "1000", name: "Retalho 1500 × 1000 mm" },
+];
+
+function pickRulerStep(spanMm: number) {
+  if (spanMm <= 650) return 100;
+  if (spanMm <= 1600) return 200;
+  if (spanMm <= 3200) return 400;
+  return 500;
+}
+
+function buildTicks(spanMm: number, stepMm: number) {
+  const ticks: number[] = [];
+  for (let v = 0; v <= spanMm - stepMm * 0.35; v += stepMm) ticks.push(v);
+  ticks.push(spanMm);
+  return ticks;
+}
 
 const number = (value: string | number | null | undefined) => Number(value || 0);
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -137,7 +161,7 @@ function machineHourlyCost(machine: Machine | undefined, catalog: Catalog) {
 }
 
 export function CutPlanPanel({ onBuildQuote }: { onBuildQuote: (prefill: CutPlanQuotePrefill) => void }) {
-  const [tab, setTab] = useState<"quick" | "vector">("quick");
+  const [tab, setTab] = useState<"vector" | "quick">("vector");
   const [catalog, setCatalog] = useState<Catalog>({ materials: [], machines: [] });
   const [loadedFiles, setLoadedFiles] = useState<string[]>([]);
   const [rawParts, setRawParts] = useState<CutPart[]>([]);
@@ -147,11 +171,12 @@ export function CutPlanPanel({ onBuildQuote }: { onBuildQuote: (prefill: CutPlan
   const [parseWarnings, setParseWarnings] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [materialId, setMaterialId] = useState("");
+  const [presetLabel, setPresetLabel] = useState("Chapa PVC / PS 1220 × 2440 mm");
   const [machineId, setMachineId] = useState("");
   const [process, setProcess] = useState<"laser" | "router_cnc">("laser");
   const [quantity, setQuantity] = useState("1");
-  const [sheetWidth, setSheetWidth] = useState("");
-  const [sheetHeight, setSheetHeight] = useState("");
+  const [sheetWidth, setSheetWidth] = useState("1220");
+  const [sheetHeight, setSheetHeight] = useState("2440");
   const [spacing, setSpacing] = useState("2");
   const [margin, setMargin] = useState("5");
   const [speed, setSpeed] = useState("500");
@@ -315,13 +340,15 @@ export function CutPlanPanel({ onBuildQuote }: { onBuildQuote: (prefill: CutPlan
     setPlan(null);
     const material = materials.find((item) => item.id === id);
     if (material) {
+      setPresetLabel("");
       setSheetWidth(String(material.width_mm));
       setSheetHeight(String(material.height_mm));
     }
   }
 
-  function applyOffcut(width: string, height: string) {
+  function applyPreset(width: string, height: string, label: string) {
     setMaterialId("");
+    setPresetLabel(label);
     setSheetWidth(width);
     setSheetHeight(height);
     setPlan(null);
@@ -412,7 +439,7 @@ export function CutPlanPanel({ onBuildQuote }: { onBuildQuote: (prefill: CutPlan
   function buildQuote() {
     if (!plan) return;
     const processLabel = process === "laser" ? "corte a laser" : "corte em router CNC";
-    const materialName = selectedMaterial?.name ?? `chapa / retalho ${sheetWidth} × ${sheetHeight} mm`;
+    const materialName = selectedMaterial?.name ?? (presetLabel || `chapa / retalho ${sheetWidth} × ${sheetHeight} mm`);
     const targetMargin = Math.max(0, Math.min(90, number(catalog.settings?.target_margin_percent) || 30));
     const suggestedPrice = estimatedCost / Math.max(1 - targetMargin / 100, 0.1);
     const materialDetail = selectedMaterial
@@ -443,13 +470,13 @@ export function CutPlanPanel({ onBuildQuote }: { onBuildQuote: (prefill: CutPlan
   return <>
     <header className="module-heading no-print"><div><p>APROVEITAMENTO · CHAPA · BOBINA · DXF</p><h1>Plano de corte inteligente</h1><span>Simule o encaixe visual por medida (chapas e bobinas) em segundos ou importe arquivos vetoriais DXF/SVG.</span></div></header>
     <div className="attendance-tabs no-print">
-      <button type="button" className={tab === "quick" ? "active" : ""} onClick={() => setTab("quick")}>
-        <Layers3 />
-        Encaixe rápido por medida (Chapa / Bobina)
-      </button>
       <button type="button" className={tab === "vector" ? "active" : ""} onClick={() => setTab("vector")}>
         <FileUp />
         Importar vetor DXF / SVG (Laser / Router)
+      </button>
+      <button type="button" className={tab === "quick" ? "active" : ""} onClick={() => setTab("quick")}>
+        <Layers3 />
+        Encaixe rápido por medida (Chapa / Bobina)
       </button>
     </div>
     {tab === "quick" ? (
@@ -513,23 +540,36 @@ export function CutPlanPanel({ onBuildQuote }: { onBuildQuote: (prefill: CutPlan
           <button type="button" className={process === "router_cnc" ? "active" : ""} onClick={() => changeProcess("router_cnc")}><Gauge /><b>Router CNC</b><small>Saída para Aspire / VCarve</small></button>
         </div>
         <div className="cut-plan-offcut-bar">
-          <span>Testar em retalho rápido (mm):</span>
+          <span>Chapas padrão:</span>
+          {SHEET_PRESETS.map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              className={!materialId && sheetWidth === preset.w && sheetHeight === preset.h ? "active" : ""}
+              onClick={() => applyPreset(preset.w, preset.h, preset.name)}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+        <div className="cut-plan-offcut-bar retalhos">
+          <span>Retalhos rápidos:</span>
           {OFFCUT_PRESETS.map((preset) => (
             <button
               key={preset.label}
               type="button"
               className={!materialId && sheetWidth === preset.w && sheetHeight === preset.h ? "active" : ""}
-              onClick={() => applyOffcut(preset.w, preset.h)}
+              onClick={() => applyPreset(preset.w, preset.h, preset.name)}
             >
               {preset.label}
             </button>
           ))}
         </div>
         <div className="cut-plan-form">
-          <label>Material / chapa<select value={materialId} onChange={(event) => chooseMaterial(event.target.value)}><option value="">{sheetWidth && sheetHeight ? "Retalho / medida livre" : "Selecione do estoque..."}</option>{materials.map((item) => <option value={item.id} key={item.id}>{item.name}{item.thickness_mm ? ` · ${item.thickness_mm} mm` : ""} · {item.width_mm} × {item.height_mm} mm</option>)}</select></label>
+          <label>Material / chapa<select value={materialId} onChange={(event) => chooseMaterial(event.target.value)}><option value="">{presetLabel || (sheetWidth && sheetHeight ? "Medida livre / retalho" : "Selecione do estoque...")}</option>{materials.map((item) => <option value={item.id} key={item.id}>{item.name}{item.thickness_mm ? ` · ${item.thickness_mm} mm` : ""} · {item.width_mm} × {item.height_mm} mm</option>)}</select></label>
           <label>Máquina<select value={machineId} onChange={(event) => { setMachineId(event.target.value); setPlan(null); }}><option value="">Sem máquina / somente encaixe</option>{machines.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
-          <label>Largura da chapa (mm)<Input type="number" min="1" value={sheetWidth} onChange={(event) => { setSheetWidth(event.target.value); setPlan(null); }} /></label>
-          <label>Altura da chapa (mm)<Input type="number" min="1" value={sheetHeight} onChange={(event) => { setSheetHeight(event.target.value); setPlan(null); }} /></label>
+          <label>Largura da chapa (mm)<Input type="number" min="1" value={sheetWidth} onChange={(event) => { setSheetWidth(event.target.value); setPresetLabel(""); setMaterialId(""); setPlan(null); }} /></label>
+          <label>Altura da chapa (mm)<Input type="number" min="1" value={sheetHeight} onChange={(event) => { setSheetHeight(event.target.value); setPresetLabel(""); setMaterialId(""); setPlan(null); }} /></label>
           <label>Multiplicar lote inteiro por<Input type="number" min="1" step="1" value={quantity} onChange={(event) => { setQuantity(event.target.value); setPlan(null); }} /></label>
           <label>Espaço entre peças (mm)<Input type="number" min="0" step="0.1" value={spacing} onChange={(event) => { setSpacing(event.target.value); setPlan(null); }} /></label>
           <label>Margem da chapa (mm)<Input type="number" min="0" step="0.1" value={margin} onChange={(event) => { setMargin(event.target.value); setPlan(null); }} /></label>
@@ -538,7 +578,7 @@ export function CutPlanPanel({ onBuildQuote }: { onBuildQuote: (prefill: CutPlan
         </div>
         <Button type="button" onClick={() => calculate(false)} disabled={calculating || totalCopies <= 0 || !number(sheetWidth) || !number(sheetHeight)}>
           {calculating ? <RefreshCw className="spin" /> : <Settings2 />}
-          {calculating ? "Otimizando sem travar a tela..." : `Calcular melhor encaixe (${totalCopies} peça${totalCopies === 1 ? "" : "s"})`}
+          {calculating ? "Calculando encaixe..." : `Calcular melhor encaixe (${totalCopies} peça${totalCopies === 1 ? "" : "s"})`}
         </Button>
       </article>
     </section>
@@ -674,12 +714,36 @@ export function CutPlanPanel({ onBuildQuote }: { onBuildQuote: (prefill: CutPlan
             const height = number(sheetHeight);
             const gridId = `cut-grid-${sheet}`;
             const sheetPlacements = plan.placements.filter((item) => item.sheet === sheet);
+            const usedMaxX = sheetPlacements.reduce((max, item) => Math.max(max, item.x + getRotatedPartSize(item.part, item.rotation).width), 0);
+            const usedMaxY = sheetPlacements.reduce((max, item) => Math.max(max, item.y + getRotatedPartSize(item.part, item.rotation).height), 0);
+            const freeTopY = Math.max(0, height - usedMaxY);
+            const maxDim = Math.max(width, height, 1);
+            const rulerLeft = Math.round(maxDim * 0.095);
+            const rulerBottom = Math.round(maxDim * 0.072);
+            const rulerPadTop = Math.round(maxDim * 0.032);
+            const rulerPadRight = Math.round(maxDim * 0.035);
+            const totalW = rulerLeft + width + rulerPadRight;
+            const totalH = rulerPadTop + height + rulerBottom;
+            const fontSize = Math.max(14, Math.round(maxDim * 0.022));
+            const tickLen = Math.max(8, Math.round(maxDim * 0.014));
+            const xStep = pickRulerStep(width);
+            const yStep = pickRulerStep(height);
+            const xTicks = buildTicks(width, xStep);
+            const yTicks = buildTicks(height, yStep);
+            const usedLineY = height - usedMaxY;
+
             return (
               <figure key={sheet} className={height > width ? "portrait" : "landscape"}>
                 <figcaption>
                   <div>
                     <span>Chapa {sheet + 1}</span>
                     <b>{width} × {height} mm · {sheetPlacements.length} peça(s)</b>
+                    {usedMaxY > 0 && (
+                      <em className="cut-plan-usage-pill">
+                        Ocupado: {decimal.format(usedMaxX / 10)} × {decimal.format(usedMaxY / 10)} cm
+                        {freeTopY >= 50 ? ` · Sobra livre: ${decimal.format(width / 10)} × ${decimal.format(freeTopY / 10)} cm` : ""}
+                      </em>
+                    )}
                   </div>
                   {plan.sheets > 1 && (
                     <div className="cut-plan-sheet-actions">
@@ -689,38 +753,91 @@ export function CutPlanPanel({ onBuildQuote }: { onBuildQuote: (prefill: CutPlan
                   )}
                 </figcaption>
                 <div className="cut-plan-sheet-frame">
-                  <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={{ aspectRatio: `${width} / ${height}` }} role="img" aria-label={`Plano de corte da chapa ${sheet + 1}`}>
+                  <svg viewBox={`0 0 ${totalW} ${totalH}`} preserveAspectRatio="xMidYMid meet" style={{ aspectRatio: `${totalW} / ${totalH}` }} role="img" aria-label={`Plano de corte da chapa ${sheet + 1}`}>
                     <defs><pattern id={gridId} width="100" height="100" patternUnits="userSpaceOnUse"><path d="M 100 0 L 0 0 0 100" /></pattern></defs>
-                    <rect className="sheet-background" width={width} height={height} />
-                    <rect className="sheet-grid" width={width} height={height} fill={`url(#${gridId})`} />
-                    <rect className="sheet-margin" x={number(margin)} y={number(margin)} width={Math.max(0, width - number(margin) * 2)} height={Math.max(0, height - number(margin) * 2)} />
-                    <g transform={`translate(0 ${height}) scale(1 -1)`}>
-                      {sheetPlacements.map((placement) => {
-                        const isHovered = hoveredPlacement?.part.id === placement.part.id;
+
+                    {/* Régua esquerda (altura em cm, origem 0 na base) */}
+                    <g className="cut-ruler">
+                      <line x1={rulerLeft - tickLen * 0.4} y1={rulerPadTop} x2={rulerLeft - tickLen * 0.4} y2={rulerPadTop + height} />
+                      {yTicks.map((mm) => {
+                        const yPos = rulerPadTop + (height - mm);
                         return (
-                          <g
-                            key={placement.part.id}
-                            className={isHovered ? "placement-hovered" : ""}
-                            onMouseEnter={() => setHoveredPlacement(placement)}
-                            onMouseLeave={() => setHoveredPlacement((cur) => (cur?.part.id === placement.part.id ? null : cur))}
-                          >
-                            {placement.part.contours.map((contour, index) => (
-                              <polygon
-                                key={`${placement.part.id}-${index}`}
-                                points={transformContour(contour, placement).map((point) => `${point.x},${point.y}`).join(" ")}
-                                className={index === 0 ? "outer" : "hole"}
-                              >
-                                <title>{`${placement.part.name} (${decimal.format(placement.part.width)} × ${decimal.format(placement.part.height)} mm · ${decimal.format(placement.rotation)}°)`}</title>
-                              </polygon>
-                            ))}
+                          <g key={`ry-${mm}`}>
+                            <line x1={rulerLeft - tickLen * 1.4} y1={yPos} x2={rulerLeft - tickLen * 0.4} y2={yPos} />
+                            <text x={rulerLeft - tickLen * 1.8} y={yPos} textAnchor="end" dominantBaseline="middle" fontSize={fontSize}>
+                              {decimal.format(mm / 10)}
+                            </text>
                           </g>
                         );
                       })}
+                      {/* Régua inferior (largura em cm) */}
+                      <line x1={rulerLeft} y1={rulerPadTop + height + tickLen * 0.4} x2={rulerLeft + width} y2={rulerPadTop + height + tickLen * 0.4} />
+                      {xTicks.map((mm) => {
+                        const xPos = rulerLeft + mm;
+                        return (
+                          <g key={`rx-${mm}`}>
+                            <line x1={xPos} y1={rulerPadTop + height + tickLen * 0.4} x2={xPos} y2={rulerPadTop + height + tickLen * 1.4} />
+                            <text x={xPos} y={rulerPadTop + height + tickLen * 1.8 + fontSize * 0.78} textAnchor="middle" fontSize={fontSize}>
+                              {decimal.format(mm / 10)}
+                            </text>
+                          </g>
+                        );
+                      })}
+                      <text x={rulerLeft - tickLen * 1.6} y={rulerPadTop + height + tickLen * 1.8 + fontSize * 0.78} textAnchor="end" fontSize={Math.round(fontSize * 0.9)} className="cut-ruler-unit">
+                        cm
+                      </text>
+                    </g>
+
+                    {/* Área da chapa */}
+                    <g transform={`translate(${rulerLeft} ${rulerPadTop})`}>
+                      <rect className="sheet-background" width={width} height={height} />
+                      <rect className="sheet-grid" width={width} height={height} fill={`url(#${gridId})`} />
+                      <rect className="sheet-margin" x={number(margin)} y={number(margin)} width={Math.max(0, width - number(margin) * 2)} height={Math.max(0, height - number(margin) * 2)} />
+
+                      {/* Linha de cota da altura realmente ocupada */}
+                      {usedMaxY > 0 && usedMaxY < height - 15 && (
+                        <g className="cut-used-guide">
+                          <line x1={0} y1={usedLineY} x2={width} y2={usedLineY} strokeDasharray={`${Math.max(12, maxDim * 0.012)} ${Math.max(8, maxDim * 0.008)}`} />
+                          <text x={width - Math.max(14, maxDim * 0.012)} y={Math.max(fontSize * 1.2, usedLineY - Math.max(10, maxDim * 0.01))} textAnchor="end" fontSize={fontSize}>
+                            Usado: {decimal.format(usedMaxY / 10)} cm ({Math.round(usedMaxY)} mm)
+                          </text>
+                        </g>
+                      )}
+                      {usedMaxX > 0 && usedMaxX < width - 30 && (
+                        <g className="cut-used-guide-x">
+                          <line x1={usedMaxX} y1={usedLineY} x2={usedMaxX} y2={height} strokeDasharray={`${Math.max(10, maxDim * 0.01)} ${Math.max(8, maxDim * 0.008)}`} />
+                        </g>
+                      )}
+
+                      <g transform={`translate(0 ${height}) scale(1 -1)`}>
+                        {sheetPlacements.map((placement) => {
+                          const isHovered = hoveredPlacement?.part.id === placement.part.id;
+                          return (
+                            <g
+                              key={placement.part.id}
+                              className={isHovered ? "placement-hovered" : ""}
+                              onMouseEnter={() => setHoveredPlacement(placement)}
+                              onMouseLeave={() => setHoveredPlacement((cur) => (cur?.part.id === placement.part.id ? null : cur))}
+                            >
+                              {placement.part.contours.map((contour, index) => (
+                                <polygon
+                                  key={`${placement.part.id}-${index}`}
+                                  points={transformContour(contour, placement).map((point) => `${point.x},${point.y}`).join(" ")}
+                                  className={index === 0 ? "outer" : "hole"}
+                                >
+                                  <title>{`${placement.part.name} (${decimal.format(placement.part.width)} × ${decimal.format(placement.part.height)} mm · ${decimal.format(placement.rotation)}°)`}</title>
+                                </polygon>
+                              ))}
+                            </g>
+                          );
+                        })}
+                      </g>
                     </g>
                   </svg>
                 </div>
                 <div className="cut-plan-sheet-legend">
                   <span><i />Área útil</span>
+                  <span>Régua em cm</span>
                   <span>Margem {margin} mm</span>
                   <span>Furos → Externo</span>
                 </div>
