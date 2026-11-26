@@ -41,6 +41,21 @@ const actualEntrySchema = z.object({
   notes: z.string().trim().max(500).optional(),
 });
 
+const quickOrderSchema = z.object({
+  action: z.literal("create_order"),
+  title: z.string().trim().min(2, "Informe o título do serviço ou tarefa.").max(180),
+  stage: z.enum(["briefing", "arte", "aprovacao", "producao", "acabamento", "expedicao", "instalacao"]).optional().default("briefing"),
+  priority: z.enum(["baixa", "normal", "alta", "urgente"]).optional().default("normal"),
+  dueAt: z.string().trim().max(20).nullable().optional(),
+  scheduledStartAt: z.string().trim().max(20).nullable().optional(),
+  responsibleId: z.string().uuid().nullable().optional(),
+  deliveryMode: z.enum(["retirada", "entrega", "instalacao"]).nullable().optional(),
+  scheduledTime: z.string().trim().max(20).nullable().optional(),
+  siteAddress: z.string().trim().max(400).nullable().optional(),
+  siteNotes: z.string().trim().max(1500).nullable().optional(),
+  description: z.string().trim().max(5000).nullable().optional(),
+});
+
 type StoredStockUsage = { materialId?: string; materialName?: string; quantity?: number; unit?: string; source?: string };
 type StoredPricingSnapshot = {
   specialProjectKind?: string;
@@ -234,9 +249,43 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const rawBody = await request.json();
+  if (rawBody && typeof rawBody === "object" && (rawBody as { action?: unknown }).action === "create_order") {
+    const access = await getManagementAccess(["admin", "producao", "comercial"], { requireActiveSubscription: true });
+    if ("response" in access) return access.response;
+    const parsed = quickOrderSchema.safeParse(rawBody);
+    if (!parsed.success) return Response.json({ error: parsed.error.issues[0]?.message ?? "Dados da tarefa inválidos." }, { status: 400 });
+    const input = parsed.data;
+    const baseRow: Record<string, unknown> = {
+      title: input.title,
+      description: input.description || null,
+      stage: input.stage,
+      priority: input.priority,
+      due_at: input.dueAt ? `${input.dueAt.slice(0, 10)}T23:59:59-03:00` : null,
+      scheduled_start_at: input.scheduledStartAt ? `${input.scheduledStartAt.slice(0, 10)}T08:00:00-03:00` : null,
+      responsible_id: input.responsibleId || null,
+      created_by: access.user.id,
+    };
+    const extendedRow: Record<string, unknown> = {
+      ...baseRow,
+      delivery_mode: input.deliveryMode || null,
+      scheduled_time: input.scheduledTime || null,
+      site_address: input.siteAddress || null,
+      site_notes: input.siteNotes || null,
+    };
+    let created = await access.supabase.from("production_orders").insert(extendedRow).select("id, number").single();
+    if (created.error?.code === "42703") {
+      created = await access.supabase.from("production_orders").insert(baseRow).select("id, number").single();
+    }
+    if (created.error || !created.data) {
+      return Response.json({ error: "Não foi possível criar a tarefa / OS avulsa." }, { status: 500 });
+    }
+    return Response.json({ order: created.data }, { status: 201 });
+  }
+
   const access = await getManagementAccess(["admin", "producao", "financeiro"], { requireActiveSubscription: true });
   if ("response" in access) return access.response;
-  const parsed = actualEntrySchema.safeParse(await request.json());
+  const parsed = actualEntrySchema.safeParse(rawBody);
   if (!parsed.success) return Response.json({ error: parsed.error.issues[0]?.message ?? "Lançamento real inválido." }, { status: 400 });
   const input = parsed.data;
   const { error } = await access.supabase.from("production_actual_entries").insert({ production_order_id: input.orderId, entry_type: input.entryType, description: input.description, quantity: input.quantity, unit: input.unit, unit_cost: input.unitCost, notes: input.notes || null, created_by: access.user.id });

@@ -276,6 +276,7 @@ export function ProductionPanel({ search, initialOrderId }: { search: string; in
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
   const [selected, setSelected] = useState<ProductionOrder | null>(null);
   const [selectedAutoFinalize, setSelectedAutoFinalize] = useState(false);
+  const [quickOrderOpen, setQuickOrderOpen] = useState(false);
   const [tvMode, setTvMode] = useState(false);
   const [deepLinkHandled, setDeepLinkHandled] = useState(false);
   const [staff, setStaff] = useState<ProductionStaff[]>([]);
@@ -429,7 +430,7 @@ export function ProductionPanel({ search, initialOrderId }: { search: string; in
     if (!destination) { setMessage("Cadastre um WhatsApp válido no cliente deste pedido antes de enviar a atualização."); return; }
     window.open(destination, "_blank", "noopener,noreferrer");
   }
-  return <><SectionHeading eyebrow="CHÃO DE FÁBRICA · PCP" title="Produção" description="Arraste ordens entre etapas no Kanban, organize instalações na Agenda ou acompanhe na TV da fábrica." action={<div className="production-head-actions"><Button variant="outline" onClick={() => switchView(viewMode === "agenda" ? "kanban" : "agenda")}><CalendarDays/>{viewMode === "agenda" ? "Voltar ao Kanban" : "Agenda de campo"}</Button><Button variant="outline" onClick={() => setTvMode(true)}><Tv/>Modo TV (Fábrica)</Button></div>}/>
+  return <><SectionHeading eyebrow="CHÃO DE FÁBRICA · PCP" title="Produção" description="Arraste ordens entre etapas no Kanban, lance tarefas avulsas sem orçamento, organize instalações na Agenda ou abra o Modo TV." action={<div className="production-head-actions"><Button onClick={() => setQuickOrderOpen(true)}><Plus/>Nova tarefa / OS</Button><Button variant="outline" onClick={() => switchView(viewMode === "agenda" ? "kanban" : "agenda")}><CalendarDays/>{viewMode === "agenda" ? "Voltar ao Kanban" : "Agenda de campo"}</Button><Button variant="outline" onClick={() => setTvMode(true)}><Tv/>Modo TV (Fábrica)</Button></div>}/>
     <section className="production-kpis"><button type="button" className={stageFilter === "ativos" ? "active" : ""} onClick={() => setStageFilter("ativos")}><ClipboardCheck/><span><small>ORDENS ATIVAS</small><b>{summary.active}</b></span></button><button type="button" className={stageFilter === "aguardando_programacao" ? "active" : ""} onClick={() => setStageFilter("aguardando_programacao")}><Sparkles/><span><small>A PROGRAMAR</small><b>{summary.awaiting}</b></span></button><button type="button" className={stageFilter === "em_producao" ? "active" : ""} onClick={() => setStageFilter("em_producao")}><Play/><span><small>EM PRODUÇÃO</small><b>{summary.inProduction}</b></span></button><button type="button" className={`${summary.overdue ? "danger" : ""} ${stageFilter === "atrasados" ? "active" : ""}`} onClick={() => setStageFilter("atrasados")}><CalendarClock/><span><small>PRAZO VENCIDO</small><b>{summary.overdue}</b></span></button><button type="button" className={stageFilter === "concluido" ? "active" : ""} onClick={() => setStageFilter("concluido")}><CheckCircle2/><span><small>CONCLUÍDAS</small><b>{summary.completed}</b></span></button></section>
     {reminders.length > 0 && <section className="production-reminders"><header><div><small>LEMBRETES AUTOMÁTICOS</small><h2>O que precisa de atenção agora</h2><p>Os avisos permanecem ativos até a etapa ou o prazo da ordem ser atualizado.</p></div><span>{reminders.length} pendência(s)</span></header><div>{reminders.slice(0, 8).map(({ order, kind, title, text }) => <button type="button" key={`${order.id}-${kind}`} className={kind} onClick={() => { setSelectedAutoFinalize(false); setSelected(order); }}><span>{kind === "overdue" ? <AlertTriangle/> : kind === "due" ? <CalendarClock/> : <Factory/>}</span><div><small>{title}</small><b>OS-{order.number} · {order.quotes?.company || order.quotes?.customer_name || "Cliente"}</b><p>{order.quotes?.service || order.title}</p><em>{text}</em></div><ArrowRight/></button>)}</div></section>}
     <Feedback message={message}/><div className="production-toolbar"><label>Visualizar<select value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}><option value="ativos">Ordens ativas</option><option value="aguardando_programacao">Aguardando programação</option><option value="em_producao">Em produção e acabamento</option><option value="atrasados">Prazo vencido</option><option value="todos">Todas</option>{stages.map((stage) => <option key={stage} value={stage}>{stageLabel[stage]}</option>)}</select></label><div className="view-mode-toggle" role="group" aria-label="Modo de visualização da produção"><button type="button" className={viewMode === "kanban" ? "active" : ""} onClick={() => switchView("kanban")}><Columns3/>Kanban PCP</button><button type="button" className={viewMode === "agenda" ? "active" : ""} onClick={() => switchView("agenda")}><CalendarDays/>Agenda</button><button type="button" className={viewMode === "grid" ? "active" : ""} onClick={() => switchView("grid")}><LayoutGrid/>Grade</button></div><span>{viewMode === "kanban" ? kanbanOrders.length : viewMode === "agenda" ? orders.filter((order) => order.stage !== "cancelado" && matchesSearchTerm(order)).length : filtered.length} ordem(ns)</span><Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw/>Atualizar</Button></div>
@@ -523,10 +524,177 @@ export function ProductionPanel({ search, initialOrderId }: { search: string; in
           );
         })}
       </div>
-    ) : <div className="production-order-grid">{filtered.map((order) => { const overdue = !["concluido", "cancelado"].includes(order.stage) && Boolean(order.due_at) && order.due_at!.slice(0, 10) < today; return <article key={order.id} className={overdue ? "overdue" : ""}><header><span>OS-{order.number}</span><em className={`priority-${order.priority}`}>{order.priority}</em></header><h3>{order.quotes?.service || order.title}</h3><p>{order.quotes?.company || order.quotes?.customer_name || "Cliente não vinculado"}</p><div><span><small>Etapa</small><b>{stageLabel[order.stage] ?? order.stage}</b></span><span><small>Prazo</small><b>{showDate(order.due_at)}</b></span><span><small>Valor</small><b>{currency.format(Number(order.quotes?.estimated_value ?? 0))}</b></span></div><footer><Button size="sm" variant="outline" onClick={() => contact(order)}><MessageCircle/>Cliente</Button><Button size="sm" onClick={() => { setSelectedAutoFinalize(false); setSelected(order); }}><FileText/>Abrir OS</Button></footer></article>; })}</div>}
+    ) : <div className="production-order-grid">{filtered.map((order) => { const overdue = !["concluido", "cancelado"].includes(order.stage) && Boolean(order.due_at) && order.due_at!.slice(0, 10) < today; return <article key={order.id} className={overdue ? "overdue" : ""}><header><span>OS-{order.number}</span><em className={`priority-${order.priority}`}>{order.priority}</em></header><h3>{order.quotes?.service || order.title}</h3><p>{order.quotes?.company || order.quotes?.customer_name || "OS avulsa / tarefa interna"}</p><div><span><small>Etapa</small><b>{stageLabel[order.stage] ?? order.stage}</b></span><span><small>Prazo</small><b>{showDate(order.due_at)}</b></span><span><small>Valor</small><b>{order.quotes?.estimated_value ? currency.format(Number(order.quotes.estimated_value)) : "Avulsa"}</b></span></div><footer>{order.quotes?.phone && <Button size="sm" variant="outline" onClick={() => contact(order)}><MessageCircle/>Cliente</Button>}<Button size="sm" onClick={() => { setSelectedAutoFinalize(false); setSelected(order); }}><FileText/>Abrir OS</Button></footer></article>; })}</div>}
     {hasMoreOrders && <div className="list-load-more"><span>Exibindo {orders.length} ordem(ns) carregada(s). Há ordens mais antigas disponíveis.</span><Button type="button" variant="outline" onClick={() => void loadMoreOrders()} disabled={loadingMoreOrders}>{loadingMoreOrders ? "Carregando..." : "Carregar mais ordens"}</Button></div>}
+    {quickOrderOpen && <QuickProductionOrderModal staff={staff} onClose={() => setQuickOrderOpen(false)} onCreated={(createdNumber) => { setQuickOrderOpen(false); void load(); notify(`OS-${createdNumber} criada e adicionada à produção!`, "success"); setMessage(`OK:Tarefa / OS-${createdNumber} adicionada à fila de produção.`); }}/>}
     {tvMode && <ShopFloorTvBoard orders={orders} staffMap={staffMap} today={today} dueSoonLimit={dueSoonLimit} onRefresh={load} onOpenOrder={(id) => { const found = orders.find((item) => item.id === id); setTvMode(false); if (found) { setSelectedAutoFinalize(false); setSelected(found); } }} onClose={() => setTvMode(false)}/>}
     {selected && <ProductionOrderDialog key={`${selected.id}-${selectedAutoFinalize ? "fin" : "std"}`} order={selected} staff={staff} advancedControl={advancedControl} scheduleColumnsReady={scheduleColumnsReady} initialFinalize={selectedAutoFinalize} onClose={() => { setSelected(null); setSelectedAutoFinalize(false); }} onUpdate={update} onRefresh={load} onWhatsApp={() => contact(selected)}/>}</>;
+}
+
+function QuickProductionOrderModal({
+  staff,
+  onClose,
+  onCreated,
+}: {
+  staff: ProductionStaff[];
+  onClose: () => void;
+  onCreated: (orderNumber: number) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [stage, setStage] = useState("briefing");
+  const [priority, setPriority] = useState("normal");
+  const [dueAt, setDueAt] = useState("");
+  const [scheduledTime, setScheduledTime] = useState("");
+  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>("retirada");
+  const [responsibleId, setResponsibleId] = useState("");
+  const [siteAddress, setSiteAddress] = useState("");
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !saving) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose, saving]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (title.trim().length < 2) {
+      setError("Informe o título do serviço ou tarefa.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const payload = await api<{ order: { id: string; number: number } }>("/api/gestao/producao", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "create_order",
+          title: title.trim(),
+          stage,
+          priority,
+          dueAt: dueAt || null,
+          scheduledTime: scheduledTime || null,
+          deliveryMode,
+          responsibleId: responsibleId || null,
+          siteAddress: siteAddress.trim() || null,
+          description: description.trim() || null,
+        }),
+      });
+      onCreated(payload.order.number);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível criar a tarefa.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      className="workspace-modal quick-os-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Nova tarefa ou OS avulsa"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !saving) onClose();
+      }}
+    >
+      <div className="workspace-dialog compact">
+        <form className="module-form quick-os-form" onSubmit={submit}>
+          <div className="form-title">
+            <div>
+              <b>Nova tarefa / OS avulsa</b>
+              <small>Lance um serviço rápido fechado no balcão/WhatsApp ou tarefa interna direto na produção — sem criar cliente ou orçamento.</small>
+            </div>
+            <Button type="button" variant="ghost" size="icon" onClick={onClose} disabled={saving}><X/></Button>
+          </div>
+          <div className="form-grid">
+            <label className="span-2">
+              Serviço / tarefa *
+              <Input
+                autoFocus
+                required
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="Ex.: Adesivo porta vidro — Padaria Central (80 × 50 cm)"
+              />
+            </label>
+            <label>
+              Etapa inicial
+              <select value={stage} onChange={(event) => setStage(event.target.value)}>
+                {stages.filter((item) => !["concluido", "cancelado"].includes(item)).map((item) => (
+                  <option key={item} value={item}>{stageLabel[item]}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Prioridade
+              <select value={priority} onChange={(event) => setPriority(event.target.value)}>
+                {priorities.map((item) => (
+                  <option key={item} value={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Prazo / data na agenda
+              <Input type="date" value={dueAt} onChange={(event) => setDueAt(event.target.value)} />
+            </label>
+            <label>
+              Horário previsto
+              <Input type="time" value={scheduledTime} onChange={(event) => setScheduledTime(event.target.value)} />
+            </label>
+            <label>
+              Modalidade
+              <select value={deliveryMode} onChange={(event) => setDeliveryMode(event.target.value as DeliveryMode)}>
+                <option value="retirada">Retirada no balcão</option>
+                <option value="entrega">Entrega / frete</option>
+                <option value="instalacao">Instalação no local</option>
+              </select>
+            </label>
+            <label>
+              Responsável
+              <select value={responsibleId} onChange={(event) => setResponsibleId(event.target.value)}>
+                <option value="">A definir</option>
+                {staff.map((person) => (
+                  <option key={person.id} value={person.id}>{person.full_name || "Equipe"}</option>
+                ))}
+              </select>
+            </label>
+            {deliveryMode !== "retirada" && (
+              <label className="span-2">
+                Endereço de entrega / instalação
+                <Input value={siteAddress} onChange={(event) => setSiteAddress(event.target.value)} placeholder="Rua, número, bairro, cidade (habilita rota no Maps/Waze)" />
+              </label>
+            )}
+            <label className="span-2 textarea-label">
+              Observações, contato e medidas
+              <textarea
+                rows={3}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="Ex.: Cliente Carlos (11) 99999-0000 · R$ 280 no PIX · acabamento com laminação fosca..."
+              />
+            </label>
+          </div>
+          <Feedback message={error} />
+          <div className="form-actions">
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+            <Button type="submit" disabled={saving}>
+              <Plus />
+              {saving ? "Criando..." : "Criar tarefa / OS"}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 function LegacyProductionOrderDialog({ order, staff, advancedControl, onClose, onUpdate, onRefresh, onWhatsApp }: { order: ProductionOrder; staff: ProductionStaff[]; advancedControl: boolean; onClose: () => void; onUpdate: (id: string, changes: ProductionChanges, success?: string) => Promise<ProductionUpdateResult>; onRefresh: () => Promise<void>; onWhatsApp: () => void }) {

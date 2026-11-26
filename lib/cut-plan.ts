@@ -22,14 +22,22 @@ export type CutPlan = {
 };
 
 type Rect = { x: number; y: number; width: number; height: number };
+type Box = { minX: number; maxX: number; minY: number; maxY: number };
 type RotationFrame = Rect & { angle: number; cosine: number; sine: number };
+type PlacedHole = { points: CutPoint[]; box: Box };
+type PlacedGeo = {
+  placement: CutPlacement;
+  box: Box;
+  outer: CutPoint[];
+  holes: PlacedHole[];
+};
 
 const rotationFrames = new WeakMap<CutContour[], Map<number, RotationFrame>>();
-const simplifiedOuters = new WeakMap<CutContour[], CutPoint[]>();
-const preciseOuters = new WeakMap<CutContour[], CutPoint[]>();
+const simplifiedContoursCache = new WeakMap<CutContour, CutPoint[]>();
+const preciseContoursCache = new WeakMap<CutContour, CutPoint[]>();
 
 const round = (value: number, digits = 3) => Number(value.toFixed(digits));
-const samePoint = (a: CutPoint, b: CutPoint, tolerance = .05) => Math.hypot(a.x - b.x, a.y - b.y) <= tolerance;
+const samePoint = (a: CutPoint, b: CutPoint, tolerance = 0.05) => Math.hypot(a.x - b.x, a.y - b.y) <= tolerance;
 const signedArea = (points: CutPoint[]) => points.reduce((sum, point, index) => {
   const next = points[(index + 1) % points.length];
   return sum + point.x * next.y - next.x * point.y;
@@ -38,10 +46,16 @@ const perimeter = (points: CutPoint[]) => points.reduce((sum, point, index) => {
   const next = points[(index + 1) % points.length];
   return sum + Math.hypot(next.x - point.x, next.y - point.y);
 }, 0);
-const bounds = (points: CutPoint[]) => ({
-  minX: Math.min(...points.map((point) => point.x)), maxX: Math.max(...points.map((point) => point.x)),
-  minY: Math.min(...points.map((point) => point.y)), maxY: Math.max(...points.map((point) => point.y)),
-});
+const bounds = (points: CutPoint[]): Box => {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const point of points) {
+    if (point.x < minX) minX = point.x;
+    if (point.x > maxX) maxX = point.x;
+    if (point.y < minY) minY = point.y;
+    if (point.y > maxY) maxY = point.y;
+  }
+  return { minX, maxX, minY, maxY };
+};
 
 function pointInPolygon(point: CutPoint, polygon: CutPoint[]) {
   let inside = false;
@@ -88,7 +102,7 @@ export function contoursToParts(raw: Array<{ vertices: Array<[number, number]>; 
   const contours = ready.flatMap((entry, index) => {
     const points = [...entry.points];
     points.pop();
-    if (points.length < 3 || Math.abs(signedArea(points)) < .01) { warnings.push(`Contorno ${index + 1} ignorado: área inválida.`); return []; }
+    if (points.length < 3 || Math.abs(signedArea(points)) < 0.01) { warnings.push(`Contorno ${index + 1} ignorado: área inválida.`); return []; }
     return [{ points, layer: entry.layer, area: Math.abs(signedArea(points)), parent: -1, depth: 0 }];
   });
   const ordered = contours.map((contour, index) => ({ ...contour, index })).sort((a, b) => b.area - a.area);
@@ -127,7 +141,7 @@ function splitFreeRectangles(free: Rect[], used: Rect) {
     if (used.y > current.y) next.push({ x: current.x, y: current.y, width: current.width, height: used.y - current.y });
     if (used.y + used.height < current.y + current.height) next.push({ x: current.x, y: used.y + used.height, width: current.width, height: current.y + current.height - used.y - used.height });
   }
-  return next.filter((rect) => rect.width > .01 && rect.height > .01).filter((rect, index, all) => !all.some((candidate, candidateIndex) => candidateIndex !== index && contains(candidate, rect)));
+  return next.filter((rect) => rect.width > 0.01 && rect.height > 0.01).filter((rect, index, all) => !all.some((candidate, candidateIndex) => candidateIndex !== index && contains(candidate, rect)));
 }
 
 function packRectangles(parts: CutPart[], sheetWidth: number, sheetHeight: number, spacing: number, margin: number, allowRotation: boolean) {
@@ -200,22 +214,24 @@ function simplifyLine(points: CutPoint[], tolerance: number): CutPoint[] {
   if (farthest <= tolerance) return [points[0], points.at(-1)!];
   return [...simplifyLine(points.slice(0, farthestIndex + 1), tolerance).slice(0, -1), ...simplifyLine(points.slice(farthestIndex), tolerance)];
 }
-function simplifiedOuter(part: CutPart) {
-  const cached = simplifiedOuters.get(part.contours); if (cached) return cached;
-  const source = part.contours[0].points;
-  const simplified = simplifyLine([...source, source[0]], .08).slice(0, -1);
+function simplifiedContour(contour: CutContour) {
+  const cached = simplifiedContoursCache.get(contour); if (cached) return cached;
+  const source = contour.points;
+  const simplified = simplifyLine([...source, source[0]], 0.12).slice(0, -1);
   const valid = simplified.length >= 3 ? simplified : source;
-  const step = Math.max(1, Math.ceil(valid.length / 48));
-  const result = valid.filter((_, index) => index % step === 0).slice(0, 48);
-  simplifiedOuters.set(part.contours, result); return result;
+  const step = Math.max(1, Math.ceil(valid.length / 40));
+  const result = valid.filter((_, index) => index % step === 0).slice(0, 40);
+  simplifiedContoursCache.set(contour, result); return result;
 }
-function preciseOuter(part: CutPart) {
-  const cached = preciseOuters.get(part.contours); if (cached) return cached;
-  const source = part.contours[0].points;
-  const simplified = simplifyLine([...source, source[0]], .02).slice(0, -1);
+function preciseContour(contour: CutContour) {
+  const cached = preciseContoursCache.get(contour); if (cached) return cached;
+  const source = contour.points;
+  const simplified = simplifyLine([...source, source[0]], 0.025).slice(0, -1);
   const result = simplified.length >= 3 ? simplified : source;
-  preciseOuters.set(part.contours, result); return result;
+  preciseContoursCache.set(contour, result); return result;
 }
+function simplifiedOuter(part: CutPart) { return simplifiedContour(part.contours[0]); }
+
 function samplePoints(points: CutPoint[], limit = 12) {
   if (points.length <= limit) return points;
   const selected = new Map<string, CutPoint>();
@@ -229,48 +245,214 @@ function samplePoints(points: CutPoint[], limit = 12) {
   for (let index = 0; index < remaining; index++) add(points[Math.min(points.length - 1, Math.floor(index * step))]);
   return [...selected.values()].slice(0, limit);
 }
-function outerPolygon(placement: CutPlacement) { return simplifiedOuter(placement.part).map((point) => { const rotated = rotateLocal(point, placement.part, placement.rotation); return { x: rotated.x + placement.x, y: rotated.y + placement.y }; }); }
-function precisePolygon(placement: CutPlacement) { return preciseOuter(placement.part).map((point) => { const rotated = rotateLocal(point, placement.part, placement.rotation); return { x: rotated.x + placement.x, y: rotated.y + placement.y }; }); }
 
-function polygonsConflict(a: CutPoint[], b: CutPoint[], spacing: number) {
-  const aBox = bounds(a), bBox = bounds(b);
-  if (aBox.maxX + spacing <= bBox.minX || bBox.maxX + spacing <= aBox.minX || aBox.maxY + spacing <= bBox.minY || bBox.maxY + spacing <= aBox.minY) return false;
-  for (let ai = 0; ai < a.length; ai++) for (let bi = 0; bi < b.length; bi++) {
-    const a1 = a[ai], a2 = a[(ai + 1) % a.length], b1 = b[bi], b2 = b[(bi + 1) % b.length];
-    if (properIntersection(a1, a2, b1, b2) || (spacing > 0 && segmentDistance(a1, a2, b1, b2) < spacing - .01)) return true;
+function buildPlacedGeo(placement: CutPlacement, precise: boolean): PlacedGeo {
+  const mapper = precise ? preciseContour : simplifiedContour;
+  const toWorld = (pts: CutPoint[]) => pts.map((point) => {
+    const rotated = rotateLocal(point, placement.part, placement.rotation);
+    return { x: rotated.x + placement.x, y: rotated.y + placement.y };
+  });
+  const outer = toWorld(mapper(placement.part.contours[0]));
+  const box = bounds(outer);
+  const holes: PlacedHole[] = [];
+  for (let index = 1; index < placement.part.contours.length; index++) {
+    const pts = toWorld(mapper(placement.part.contours[index]));
+    holes.push({ points: pts, box: bounds(pts) });
   }
-  return pointInPolygon(a[0], b) || pointInPolygon(b[0], a);
+  return { placement, box, outer, holes };
 }
 
-function candidatePositions(part: CutPart, rotation: CutRotation, placed: CutPlacement[], margin: number, spacing: number, limit: number) {
-  const size = rotatedSize(part, rotation); const values = new Map<string, { x: number; y: number }>();
-  const add = (x: number, y: number) => { const rounded = { x: round(x, 3), y: round(y, 3) }; values.set(`${rounded.x}:${rounded.y}`, rounded); };
+function boxesOverlap(a: Box, b: Box, spacing: number) {
+  return !(a.maxX + spacing <= b.minX || b.maxX + spacing <= a.minX || a.maxY + spacing <= b.minY || b.maxY + spacing <= a.minY);
+}
+
+function ringsTooClose(a: CutPoint[], b: CutPoint[], spacing: number) {
+  const minDist = Math.max(0, spacing - 0.01);
+  for (let ai = 0; ai < a.length; ai++) {
+    const a1 = a[ai], a2 = a[(ai + 1) % a.length];
+    for (let bi = 0; bi < b.length; bi++) {
+      const b1 = b[bi], b2 = b[(bi + 1) % b.length];
+      if (properIntersection(a1, a2, b1, b2)) return true;
+      if (minDist > 0 && segmentDistance(a1, a2, b1, b2) < minDist) return true;
+    }
+  }
+  return false;
+}
+
+function pointInsideSolid(point: CutPoint, outer: CutPoint[], holes: PlacedHole[]) {
+  if (!pointInPolygon(point, outer)) return false;
+  for (const hole of holes) {
+    if (point.x >= hole.box.minX && point.x <= hole.box.maxX && point.y >= hole.box.minY && point.y <= hole.box.maxY && pointInPolygon(point, hole.points)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Hole-aware conflict check: allows smaller parts to nest cleanly inside internal holes of larger parts!
+function geosConflict(a: PlacedGeo, b: PlacedGeo, spacing: number) {
+  if (!boxesOverlap(a.box, b.box, spacing)) return false;
+  if (ringsTooClose(a.outer, b.outer, spacing)) return true;
+  for (const hole of b.holes) {
+    if (boxesOverlap(a.box, hole.box, spacing) && ringsTooClose(a.outer, hole.points, spacing)) return true;
+  }
+  for (const hole of a.holes) {
+    if (boxesOverlap(b.box, hole.box, spacing) && ringsTooClose(b.outer, hole.points, spacing)) return true;
+  }
+  if (pointInsideSolid(a.outer[0], b.outer, b.holes)) return true;
+  if (pointInsideSolid(b.outer[0], a.outer, a.holes)) return true;
+  return false;
+}
+
+function buildSpatialFrontier(placed: PlacedGeo[]): PlacedGeo[] {
+  if (placed.length <= 16) return placed;
+  const selected = new Set<PlacedGeo>();
+  // Keep earliest (largest bottom-left) parts so small late pieces backfill initial pockets
+  for (let i = 0; i < Math.min(6, placed.length); i++) selected.add(placed[i]);
+  // Keep latest frontier parts
+  for (let i = Math.max(0, placed.length - 10); i < placed.length; i++) selected.add(placed[i]);
+  // Always include parts that have internal holes so small pieces can nest inside them
+  for (const item of placed) {
+    if (item.holes.length > 0) selected.add(item);
+  }
+  return [...selected];
+}
+
+function candidatePositions(part: CutPart, rotation: CutRotation, placed: PlacedGeo[], sheetWidth: number, sheetHeight: number, margin: number, spacing: number, limit: number) {
+  const size = rotatedSize(part, rotation);
+  const values = new Map<string, { x: number; y: number }>();
+  const add = (x: number, y: number) => {
+    const rounded = { x: round(x, 2), y: round(y, 2) };
+    values.set(`${rounded.x}:${rounded.y}`, rounded);
+  };
   add(margin, margin);
-  const localVertices = samplePoints(part.contours[0].points.map((point) => rotateLocal(point, part, rotation)));
-  const frontier = [...(placed.length <= 12 ? placed : placed.slice(-12))].reverse();
+  // Top-right & mid-sheet start points let sliding compaction interlock diagonal wedges & triangles!
+  const maxX = sheetWidth - margin - size.width;
+  const maxY = sheetHeight - margin - size.height;
+  if (placed.length > 0 && maxX >= margin && maxY >= margin) {
+    add(maxX, maxY);
+    add(maxX, margin);
+    add(margin, maxY);
+  }
+  const localVertices = samplePoints(simplifiedOuter(part).map((point) => rotateLocal(point, part, rotation)), 10);
+  const frontier = buildSpatialFrontier(placed).reverse();
+
   for (const existing of frontier) {
-    const box = placementBounds(existing);
-    add(box.x + box.width + spacing, box.y); add(box.x - size.width - spacing, box.y); add(box.x, box.y + box.height + spacing); add(box.x, box.y - size.height - spacing);
-    add(margin, box.y); add(box.x, margin); add(margin, box.y + box.height + spacing); add(box.x + box.width + spacing, margin);
-    const horizontalStep = Math.max(2, Math.min(size.width, box.width) / 18);
+    const box = { x: existing.box.minX, y: existing.box.minY, width: existing.box.maxX - existing.box.minX, height: existing.box.maxY - existing.box.minY };
+
+    // Diagonal interlock anchors (triangles, wedges, trapezoids, letters A/V/W/N/Z)
+    const diagOffset = Math.max(spacing * 1.5, 2);
+    add(box.x + diagOffset, box.y + diagOffset);
+    add(box.x + box.width - size.width + diagOffset, box.y + box.height - size.height + diagOffset);
+
+    // 1. Hole-interior candidates (nest smaller pieces inside rings, letters O/D/0, frames)
+    for (const hole of existing.holes) {
+      const holeW = hole.box.maxX - hole.box.minX;
+      const holeH = hole.box.maxY - hole.box.minY;
+      if (holeW >= size.width + spacing * 2 && holeH >= size.height + spacing * 2) {
+        add(hole.box.minX + spacing, hole.box.minY + spacing);
+        add(hole.box.minX + (holeW - size.width) / 2, hole.box.minY + (holeH - size.height) / 2);
+        add(hole.box.maxX - size.width - spacing, hole.box.minY + spacing);
+        add(hole.box.minX + spacing, hole.box.maxY - size.height - spacing);
+      }
+    }
+
+    // 2. Bounding-box flush & wall-aligned anchors
+    add(box.x + box.width + spacing, box.y);
+    add(box.x - size.width - spacing, box.y);
+    add(box.x, box.y + box.height + spacing);
+    add(box.x, box.y - size.height - spacing);
+    add(margin, box.y);
+    add(box.x, margin);
+    add(margin, box.y + box.height + spacing);
+    add(box.x + box.width + spacing, margin);
+
+    // 3. Sliding scan along existing bounding box
+    const horizontalStep = Math.max(4, Math.min(size.width, box.width) / 10);
     for (let x = box.x - size.width + spacing; x <= box.x + box.width - spacing; x += horizontalStep) {
       add(x, box.y);
       add(x, box.y + (box.height - size.height) / 2);
       add(x, box.y + box.height - size.height);
     }
-    const existingVertices = samplePoints(outerPolygon(existing));
-    for (const anchor of existingVertices) for (const vertex of localVertices) {
-      const baseX = anchor.x - vertex.x, baseY = anchor.y - vertex.y;
-      const candidateCenterX = baseX + size.width / 2, candidateCenterY = baseY + size.height / 2;
-      const existingCenterX = box.x + box.width / 2, existingCenterY = box.y + box.height / 2;
-      const vectorX = candidateCenterX - existingCenterX, vectorY = candidateCenterY - existingCenterY;
-      const vectorLength = Math.max(Math.hypot(vectorX, vectorY), .0001);
-      add(baseX + vectorX / vectorLength * spacing, baseY + vectorY / vectorLength * spacing);
-      add(baseX + spacing, baseY); add(baseX - spacing, baseY);
-      add(baseX, baseY + spacing); add(baseX, baseY - spacing);
+
+    // 4. Vertex-to-vertex interlocking anchors
+    const existingVertices = samplePoints(existing.outer, 10);
+    for (const anchor of existingVertices) {
+      for (const vertex of localVertices) {
+        const baseX = anchor.x - vertex.x, baseY = anchor.y - vertex.y;
+        const candidateCenterX = baseX + size.width / 2, candidateCenterY = baseY + size.height / 2;
+        const existingCenterX = box.x + box.width / 2, existingCenterY = box.y + box.height / 2;
+        const vectorX = candidateCenterX - existingCenterX, vectorY = candidateCenterY - existingCenterY;
+        const vectorLength = Math.max(Math.hypot(vectorX, vectorY), 0.0001);
+        add(baseX + vectorX / vectorLength * spacing, baseY + vectorY / vectorLength * spacing);
+        add(baseX + spacing, baseY);
+        add(baseX, baseY + spacing);
+      }
     }
+    if (values.size >= limit) break;
   }
   return [...values.values()].slice(0, limit);
+}
+
+// Binary-search bottom-left sliding compaction: pulls each piece down (-Y) and left (-X) until exact spacing!
+function compactPlacement(
+  placement: CutPlacement,
+  placed: PlacedGeo[],
+  sheetWidth: number,
+  sheetHeight: number,
+  margin: number,
+  spacing: number,
+  precise: boolean,
+): CutPlacement {
+  const size = rotatedSize(placement.part, placement.rotation);
+  const maxX = sheetWidth - margin - size.width;
+  const maxY = sheetHeight - margin - size.height;
+
+  const fits = (x: number, y: number) => {
+    if (x < margin - 0.01 || y < margin - 0.01 || x > maxX + 0.01 || y > maxY + 0.01) return false;
+    const geo = buildPlacedGeo({ ...placement, x, y }, precise);
+    for (const other of placed) {
+      if (geosConflict(geo, other, spacing)) return false;
+    }
+    return true;
+  };
+
+  let curX = placement.x;
+  let curY = placement.y;
+
+  const slideDown = () => {
+    if (curY <= margin + 0.35) return;
+    if (fits(curX, margin)) { curY = margin; return; }
+    let lo = margin, hi = curY;
+    for (let iter = 0; iter < 9; iter++) {
+      const mid = (lo + hi) / 2;
+      if (fits(curX, mid)) hi = mid;
+      else lo = mid;
+      if (hi - lo < 0.35) break;
+    }
+    curY = hi;
+  };
+
+  const slideLeft = () => {
+    if (curX <= margin + 0.35) return;
+    if (fits(margin, curY)) { curX = margin; return; }
+    let lo = margin, hi = curX;
+    for (let iter = 0; iter < 9; iter++) {
+      const mid = (lo + hi) / 2;
+      if (fits(mid, curY)) hi = mid;
+      else lo = mid;
+      if (hi - lo < 0.35) break;
+    }
+    curX = hi;
+  };
+
+  // Two alternating gravity passes settle irregular curves and diagonals deeply into pockets
+  slideDown();
+  slideLeft();
+  slideDown();
+  slideLeft();
+
+  return { ...placement, x: round(curX, 3), y: round(curY, 3) };
 }
 
 function seededRandom(seedValue: number) {
@@ -284,69 +466,124 @@ function textSeed(value: string) {
   return hash >>> 0;
 }
 
-function rotationCandidates(allowRotation: boolean, parts: CutPart[], attemptSeed: number) {
+function rotationCandidates(allowRotation: boolean, parts: CutPart[], attemptSeed: number, orthogonalOnly = false) {
   if (!allowRotation) return [0];
+  if (orthogonalOnly || parts.length > 60) return [0, 90, 180, 270];
   const angles = new Set<number>([0, 90, 180, 270, 45, 135, 225, 315]);
-  const uniqueContours = [...new Map(parts.map((part) => [part.contours, part])).values()].slice(0, 16);
+  if (parts.length <= 24) {
+    [30, 60, 120, 150, 210, 240, 300, 330].forEach((a) => angles.add(a));
+  }
+  const uniqueContours = [...new Map(parts.map((part) => [part.contours, part])).values()].slice(0, 12);
   const edges = uniqueContours.flatMap((part) => simplifiedOuter(part).map((point, index, points) => {
     const next = points[(index + 1) % points.length];
     return { angle: Math.atan2(next.y - point.y, next.x - point.x) * 180 / Math.PI, length: Math.hypot(next.x - point.x, next.y - point.y) };
   })).sort((a, b) => b.length - a.length);
+  const edgeLimit = parts.length <= 24 ? 3 : 2;
   const selectedEdges: typeof edges = [];
   for (const edge of edges) {
     const direction = normalizedAngle(edge.angle) % 90;
-    if (selectedEdges.some((item) => Math.abs((normalizedAngle(item.angle) % 90) - direction) < .5)) continue;
-    selectedEdges.push(edge); if (selectedEdges.length === 3) break;
+    if (selectedEdges.some((item) => Math.abs((normalizedAngle(item.angle) % 90) - direction) < 1)) continue;
+    selectedEdges.push(edge);
+    if (selectedEdges.length === edgeLimit) break;
   }
   for (const edge of selectedEdges) {
     const aligned = normalizedAngle(-edge.angle);
     angles.add(aligned); angles.add(normalizedAngle(aligned + 90)); angles.add(normalizedAngle(aligned + 180)); angles.add(normalizedAngle(aligned + 270));
   }
-  const random = seededRandom(attemptSeed || 1);
-  const randomAngles = parts.length <= 20 ? 4 : 2;
-  for (let index = 0; index < randomAngles; index++) angles.add(round(random() * 360, 3));
+  if (attemptSeed > 1) {
+    const random = seededRandom(attemptSeed);
+    const randomAngles = parts.length <= 24 ? 4 : 2;
+    for (let index = 0; index < randomAngles; index++) angles.add(round(random() * 360, 2));
+  }
   return [...angles].sort((a, b) => a - b);
 }
 
-function packIrregular(parts: CutPart[], sheetWidth: number, sheetHeight: number, spacing: number, margin: number, allowRotation: boolean, attemptSeed: number) {
-  const rotations = rotationCandidates(allowRotation, parts, attemptSeed);
-  const candidateLimit = rotations.length > 16 ? 190 : rotations.length > 8 ? 260 : 800;
-  const sheets: CutPlacement[][] = [];
+function sheetEnvelopeScore(placed: PlacedGeo[], candidate: PlacedGeo, sheetWidth: number) {
+  let minX = candidate.box.minX, minY = candidate.box.minY, maxX = candidate.box.maxX, maxY = candidate.box.maxY;
+  for (const item of placed) {
+    if (item.box.minX < minX) minX = item.box.minX;
+    if (item.box.minY < minY) minY = item.box.minY;
+    if (item.box.maxX > maxX) maxX = item.box.maxX;
+    if (item.box.maxY > maxY) maxY = item.box.maxY;
+  }
+  const usedWidth = maxX - minX;
+  const usedHeight = maxY - minY;
+  const bboxArea = usedWidth * usedHeight;
+  return bboxArea * 0.55 + usedHeight * sheetWidth * 0.45 + (candidate.placement.y * sheetWidth + candidate.placement.x) * 0.002;
+}
+
+function packIrregular(
+  parts: CutPart[],
+  sheetWidth: number,
+  sheetHeight: number,
+  spacing: number,
+  margin: number,
+  allowRotation: boolean,
+  attemptSeed: number,
+  orthogonalOnly = false,
+) {
+  const rotations = rotationCandidates(allowRotation, parts, attemptSeed, orthogonalOnly);
+  const candidateLimit = parts.length > 60 ? 90 : rotations.length > 16 ? 140 : rotations.length > 8 ? 200 : 320;
+  const sheetsSimple: PlacedGeo[][] = [];
+  const sheetsPrecise: PlacedGeo[][] = [];
+
   for (const part of parts) {
     const variation = seededRandom(Math.imul(attemptSeed || 1, 2654435761) ^ textSeed(part.id));
     let best: { sheet: number; placement: CutPlacement; score: number } | null = null;
-    const inspect = (sheet: number, placed: CutPlacement[]) => {
+
+    const inspect = (sheet: number, placedSimple: PlacedGeo[], placedPrecise: PlacedGeo[]) => {
       const candidates: Array<{ sheet: number; placement: CutPlacement; score: number }> = [];
       for (const rotation of rotations) {
         const size = rotatedSize(part, rotation);
-        for (const candidate of candidatePositions(part, rotation, placed, margin, spacing, candidateLimit)) {
-          if (candidate.x < margin - .01 || candidate.y < margin - .01 || candidate.x + size.width > sheetWidth - margin + .01 || candidate.y + size.height > sheetHeight - margin + .01) continue;
+        if (size.width > sheetWidth - margin * 2 + 0.01 || size.height > sheetHeight - margin * 2 + 0.01) continue;
+        for (const candidate of candidatePositions(part, rotation, placedSimple, sheetWidth, sheetHeight, margin, spacing, candidateLimit)) {
+          if (candidate.x < margin - 0.01 || candidate.y < margin - 0.01 || candidate.x + size.width > sheetWidth - margin + 0.01 || candidate.y + size.height > sheetHeight - margin + 0.01) continue;
           const placement: CutPlacement = { part, sheet, x: candidate.x, y: candidate.y, rotation };
-          const polygon = outerPolygon(placement);
-          if (placed.some((other) => polygonsConflict(polygon, outerPolygon(other), spacing))) continue;
-          const all = [...placed, placement].map(placementBounds);
-          const minX = Math.min(...all.map((box) => box.x)), minY = Math.min(...all.map((box) => box.y));
-          const maxX = Math.max(...all.map((box) => box.x + box.width)), maxY = Math.max(...all.map((box) => box.y + box.height));
-          const usedWidth = maxX - minX, usedHeight = maxY - minY;
-          const baseScore = usedHeight * sheetWidth + usedWidth;
-          const score = baseScore + (attemptSeed > 1 ? variation() * sheetWidth * .28 : 0);
+          const geo = buildPlacedGeo(placement, false);
+          if (placedSimple.some((other) => geosConflict(geo, other, spacing))) continue;
+          const baseScore = sheetEnvelopeScore(placedSimple, geo, sheetWidth);
+          const score = baseScore + (attemptSeed > 1 ? variation() * sheetWidth * 0.22 : 0);
           candidates.push({ sheet, placement, score });
         }
       }
-      const precisePlaced = placed.map(precisePolygon);
-      for (const candidate of candidates.sort((a, b) => a.score - b.score)) {
-        const polygon = precisePolygon(candidate.placement);
-        if (precisePlaced.some((other) => polygonsConflict(polygon, other, spacing))) continue;
-        if (!best || candidate.score < best.score) best = candidate;
-        break;
+      if (!candidates.length) return;
+      candidates.sort((a, b) => a.score - b.score);
+      // Verify and binary-search compact the top 3 distinct valid placements on precise contours!
+      let checkedValid = 0;
+      for (const candidate of candidates) {
+        const preciseGeo = buildPlacedGeo(candidate.placement, true);
+        if (placedPrecise.some((other) => geosConflict(preciseGeo, other, spacing))) continue;
+        const compacted = compactPlacement(candidate.placement, placedPrecise, sheetWidth, sheetHeight, margin, spacing, true);
+        const compactedGeo = buildPlacedGeo(compacted, true);
+        const compactedScore = sheetEnvelopeScore(placedPrecise, compactedGeo, sheetWidth);
+        if (!best || compactedScore < best.score) {
+          best = { sheet, placement: compacted, score: compactedScore };
+        }
+        checkedValid += 1;
+        if (checkedValid >= (parts.length > 50 ? 1 : 3)) break;
       }
     };
-    sheets.forEach((placed, sheet) => inspect(sheet, placed));
-    if (!best) { sheets.push([]); inspect(sheets.length - 1, sheets.at(-1)!); }
+
+    for (let sheet = 0; sheet < sheetsSimple.length; sheet++) {
+      inspect(sheet, sheetsSimple[sheet], sheetsPrecise[sheet]);
+      if (best) break;
+    }
+    if (!best) {
+      sheetsSimple.push([]);
+      sheetsPrecise.push([]);
+      const nextSheet = sheetsSimple.length - 1;
+      inspect(nextSheet, sheetsSimple[nextSheet], sheetsPrecise[nextSheet]);
+    }
     if (!best) throw new Error(`${part.name} (${round(part.width)} × ${round(part.height)} mm) não cabe na chapa selecionada.`);
-    const selected = best as { sheet: number; placement: CutPlacement; score: number }; sheets[selected.sheet].push(selected.placement);
+    const selected = best as { sheet: number; placement: CutPlacement; score: number };
+    sheetsSimple[selected.sheet].push(buildPlacedGeo(selected.placement, false));
+    sheetsPrecise[selected.sheet].push(buildPlacedGeo(selected.placement, true));
   }
-  return { placements: sheets.flat(), sheets: sheets.length };
+
+  return {
+    placements: sheetsPrecise.flatMap((sheet) => sheet.map((geo) => geo.placement)),
+    sheets: sheetsPrecise.length,
+  };
 }
 
 function planLayoutScore(placements: CutPlacement[], sheets: number, sheetWidth: number) {
@@ -388,24 +625,61 @@ export function createCutPlan(parts: CutPart[], options: { sheetWidth: number; s
     }
   }
   if (!copies.length) throw new Error("Ative ao menos uma peça com quantidade maior que zero.");
-  const random = seededRandom(options.attemptSeed ?? 1);
+
+  const seed = options.attemptSeed ?? 1;
+  const random = seededRandom(seed);
   const ranks = new Map(copies.map((part) => [part.id, random()]));
   const strategies = [
-    [...copies].sort((a, b) => b.area - a.area || (ranks.get(a.id) ?? 0) - (ranks.get(b.id) ?? 0)),
-    [...copies].sort((a, b) => Math.max(b.width, b.height) - Math.max(a.width, a.height) || (ranks.get(b.id) ?? 0) - (ranks.get(a.id) ?? 0)),
+    // 1. Maior área primeiro (coloca peças grandes / com furos primeiro para pequenas entrarem depois)
+    [...copies].sort((a, b) => (b.width * b.height) - (a.width * a.height) || b.area - a.area),
+    // 2. Maior dimensão linear primeiro (ótimo para peças compridas e estreitas)
+    [...copies].sort((a, b) => Math.max(b.width, b.height) - Math.max(a.width, a.height) || b.area - a.area),
+    // 3. Peças com furos e maior perímetro primeiro (maximiza encaixe interno)
+    [...copies].sort((a, b) => (b.contours.length - a.contours.length) || b.cutLength - a.cutLength),
+    // 4. Ordem perturbada para tentativas alternativas
     [...copies].sort((a, b) => (ranks.get(a.id) ?? 0) - (ranks.get(b.id) ?? 0)),
   ];
-  const selectedStrategy = strategies[Math.abs((options.attemptSeed ?? 1) - 1) % strategies.length];
-  const attempts = [selectedStrategy].flatMap((ordered) => ordered.length <= 40
-    ? [
-        packIrregular(ordered, options.sheetWidth, options.sheetHeight, options.spacing, options.margin, options.allowRotation, options.attemptSeed ?? 1),
-        ...(options.allowRotation ? [packIrregular(ordered, options.sheetWidth, options.sheetHeight, options.spacing, options.margin, false, options.attemptSeed ?? 1)] : []),
-      ]
-    : [packRectangles(ordered, options.sheetWidth, options.sheetHeight, options.spacing, options.margin, options.allowRotation)]);
+
+  const startedAt = Date.now();
+  const timeBudgetMs = copies.length > 50 ? 6000 : 4500;
+  const attempts: Array<{ placements: CutPlacement[]; sheets: number }> = [];
+
+  if (copies.length <= 120) {
+    if (seed <= 1) {
+      // No 1º clique, avalia automaticamente encaixe ortogonal (0/90/180/270) + livre (todos os ângulos) em múltiplas ordens
+      if (options.allowRotation) {
+        attempts.push(packIrregular(strategies[0], options.sheetWidth, options.sheetHeight, options.spacing, options.margin, true, 1, true));
+      }
+      for (let i = 0; i < 3; i++) {
+        if (Date.now() - startedAt > timeBudgetMs) break;
+        attempts.push(packIrregular(strategies[i], options.sheetWidth, options.sheetHeight, options.spacing, options.margin, options.allowRotation, 1, false));
+      }
+      if (options.allowRotation && Date.now() - startedAt <= timeBudgetMs) {
+        attempts.push(packIrregular(strategies[1], options.sheetWidth, options.sheetHeight, options.spacing, options.margin, true, 1, true));
+      }
+    } else {
+      const selectedStrategy = strategies[Math.abs(seed - 1) % strategies.length];
+      attempts.push(packIrregular(selectedStrategy, options.sheetWidth, options.sheetHeight, options.spacing, options.margin, options.allowRotation, seed, false));
+      if (options.allowRotation && Date.now() - startedAt <= timeBudgetMs) {
+        attempts.push(packIrregular(strategies[3], options.sheetWidth, options.sheetHeight, options.spacing, options.margin, true, seed + 17, seed % 2 === 0));
+      }
+    }
+  } else {
+    attempts.push(packRectangles(strategies[0], options.sheetWidth, options.sheetHeight, options.spacing, options.margin, options.allowRotation));
+    attempts.push(packRectangles(strategies[1], options.sheetWidth, options.sheetHeight, options.spacing, options.margin, options.allowRotation));
+  }
+
   const best = attempts.sort((a, b) => a.sheets - b.sheets || planLayoutScore(a.placements, a.sheets, options.sheetWidth) - planLayoutScore(b.placements, b.sheets, options.sheetWidth))[0];
   const totalArea = copies.reduce((sum, part) => sum + part.area, 0);
   const totalCutLength = copies.reduce((sum, part) => sum + part.cutLength, 0);
-  return { ...best, utilisation: totalArea / Math.max(options.sheetWidth * options.sheetHeight * best.sheets, 1) * 100, layoutScore: planLayoutScore(best.placements, best.sheets, options.sheetWidth), totalCutLength, estimatedMinutes: options.setupMinutes + totalCutLength / Math.max(options.speedMmMin, 1), warnings: [] } satisfies CutPlan;
+  return {
+    ...best,
+    utilisation: totalArea / Math.max(options.sheetWidth * options.sheetHeight * best.sheets, 1) * 100,
+    layoutScore: planLayoutScore(best.placements, best.sheets, options.sheetWidth),
+    totalCutLength,
+    estimatedMinutes: options.setupMinutes + totalCutLength / Math.max(options.speedMmMin, 1),
+    warnings: [],
+  } satisfies CutPlan;
 }
 
 export function transformContour(contour: CutContour, placement: CutPlacement) {
@@ -436,8 +710,9 @@ export function exportCutPlanDxf(plan: CutPlan, options?: { sheetIndex?: number;
       pushContour(points, "FUROS_INTERNOS", 1, xOffset);
     }
   }
-  // Pass 2: contornos externos por último
-  for (const placement of targetPlacements) {
+  // Pass 2: contornos externos por último (peças menores primeiro para corte seguro de peças encaixadas em furos)
+  const sortedOuters = [...targetPlacements].sort((a, b) => a.part.area - b.part.area);
+  for (const placement of sortedOuters) {
     const xOffset = placement.sheet * sheetStride;
     if (placement.part.contours[0]) {
       const points = transformContour(placement.part.contours[0], placement);
@@ -463,6 +738,8 @@ export function exportCutPlanSvg(plan: CutPlan, sheetWidth: number, sheetHeight:
       const pts = toSvgPoints(transformContour(placement.part.contours[index], placement));
       holes.push(`    <polygon points="${pts}" />`);
     }
+  }
+  for (const placement of [...placements].sort((a, b) => a.part.area - b.part.area)) {
     if (placement.part.contours[0]) {
       const pts = toSvgPoints(transformContour(placement.part.contours[0], placement));
       outers.push(`    <polygon points="${pts}" />`);

@@ -534,7 +534,7 @@ export function CutPlanPanel({ onBuildQuote }: { onBuildQuote: (prefill: CutPlan
           <label>Espaço entre peças (mm)<Input type="number" min="0" step="0.1" value={spacing} onChange={(event) => { setSpacing(event.target.value); setPlan(null); }} /></label>
           <label>Margem da chapa (mm)<Input type="number" min="0" step="0.1" value={margin} onChange={(event) => { setMargin(event.target.value); setPlan(null); }} /></label>
           <label>Velocidade de corte (mm/min)<Input type="number" min="1" value={speed} onChange={(event) => { setSpeed(event.target.value); setPlan(null); }} /></label>
-          <label className="cut-plan-check"><input type="checkbox" checked={allowRotation} onChange={(event) => { setAllowRotation(event.target.checked); setPlan(null); setAttemptCount(0); }} /><span><b>Buscar o melhor ângulo automaticamente</b><small>O sistema analisa as inclinações do próprio desenho e também testa novas combinações. Desative somente para materiais com veio ou sentido obrigatório.</small></span></label>
+          <label className="cut-plan-check"><input type="checkbox" checked={allowRotation} onChange={(event) => { setAllowRotation(event.target.checked); setPlan(null); setAttemptCount(0); }} /><span><b>Encaixe inteligente v2 (ângulos, furos internos e compactação)</b><small>Testa múltiplas estratégias automaticamente, desliza as peças até o espaçamento exato e aproveita furos internos de peças vazadas. Desative a rotação somente para materiais com veio obrigatório.</small></span></label>
         </div>
         <Button type="button" onClick={() => calculate(false)} disabled={calculating || totalCopies <= 0 || !number(sheetWidth) || !number(sheetHeight)}>
           {calculating ? <RefreshCw className="spin" /> : <Settings2 />}
