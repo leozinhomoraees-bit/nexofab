@@ -1,10 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, ClipboardList, Layers3, Plus, Printer, RotateCw, Ruler, ScrollText, Trash2 } from "lucide-react";
+import { AlertTriangle, ClipboardList, Download, FileCode2, Layers3, Plus, Printer, RotateCw, Ruler, ScrollText, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { computeRectNesting, type RectPieceInput } from "@/lib/rect-nesting";
+import {
+  computeRectNesting,
+  exportRectNestingDxf,
+  exportRectNestingSvg,
+  type NestedSheet,
+  type RectPieceInput,
+} from "@/lib/rect-nesting";
 import type { CutPlanQuotePrefill } from "@/lib/cut-plan-quote";
 
 type CatalogMaterial = {
@@ -28,11 +34,37 @@ type PieceRow = {
 };
 
 const sheetPresets = [
+  { label: "PVC / PS 122×244 cm", wCm: "122", hCm: "244" },
   { label: "ACM 122×500 cm", wCm: "122", hCm: "500" },
-  { label: "PVC 122×244 cm", wCm: "122", hCm: "244" },
-  { label: "Acrílico / PS 100×200 cm", wCm: "100", hCm: "200" },
+  { label: "Acrílico 100×200 cm", wCm: "100", hCm: "200" },
   { label: "MDF 185×275 cm", wCm: "185", hCm: "275" },
+  { label: "MDF Laser 60×90 cm", wCm: "60", hCm: "90" },
+  { label: "Galvanizado 120×200 cm", wCm: "120", hCm: "200" },
 ];
+
+function pickRulerStep(spanMm: number) {
+  if (spanMm <= 650) return 100;
+  if (spanMm <= 1600) return 200;
+  if (spanMm <= 3200) return 400;
+  return 500;
+}
+
+function buildTicks(spanMm: number, stepMm: number) {
+  const ticks: number[] = [];
+  for (let v = 0; v <= spanMm - stepMm * 0.35; v += stepMm) ticks.push(v);
+  ticks.push(spanMm);
+  return ticks;
+}
+
+function downloadBlob(content: string, mime: string, filename: string) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 const rollPresets = [
   { label: "Vinil 100 cm", wCm: "100" },
@@ -151,6 +183,18 @@ export function QuickRectNesting({
   const unitCostNum = Math.max(0, Number(unitMaterialCost || 0));
   const estimatedMaterialCost =
     mode === "chapa" ? result.totalSheets * unitCostNum : result.linearMeters * unitCostNum;
+
+  function downloadDxf(sheetIndex?: number) {
+    if (!result.sheets.length) return;
+    const content = exportRectNestingDxf(result.sheets, { sheetIndex });
+    const suffix = sheetIndex !== undefined ? `-chapa-${sheetIndex}` : "";
+    downloadBlob(content, "application/dxf", `nexofab-plano-corte-${mode}${suffix}.dxf`);
+  }
+
+  function downloadSvg(sheet: NestedSheet) {
+    const content = exportRectNestingSvg(sheet);
+    downloadBlob(content, "image/svg+xml;charset=utf-8", `nexofab-plano-corte-${mode}-chapa-${sheet.index}.svg`);
+  }
 
   function sendToQuote() {
     if (!result.totalPiecesPlaced) return;
@@ -373,7 +417,20 @@ export function QuickRectNesting({
               <Printer />
               Imprimir mapa
             </Button>
-            <Button type="button" onClick={sendToQuote} disabled={!result.totalPiecesPlaced}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => result.sheets[0] && downloadSvg(result.sheets[0])}
+              disabled={!result.totalPiecesPlaced}
+            >
+              <FileCode2 />
+              Baixar SVG (mm)
+            </Button>
+            <Button type="button" onClick={() => downloadDxf()} disabled={!result.totalPiecesPlaced}>
+              <Download />
+              Baixar DXF encaixado
+            </Button>
+            <Button type="button" variant="outline" onClick={sendToQuote} disabled={!result.totalPiecesPlaced}>
               <ClipboardList />
               Montar orçamento
             </Button>
@@ -406,23 +463,57 @@ export function QuickRectNesting({
         {result.sheets.length > 0 ? (
           <div className="cut-plan-preview">
             {result.sheets.map((sheet) => {
-              const isPortrait = sheet.heightMm > sheet.widthMm;
-              const fontSize = Math.max(Math.min(sheet.widthMm, sheet.heightMm) * 0.028, 18);
-              const gridStep = Math.max(100, Math.round(sheet.widthMm / 12 / 50) * 50);
+              const width = sheet.widthMm;
+              const height = Math.max(sheet.heightMm, 1);
+              const isPortrait = height > width;
+              const maxDim = Math.max(width, height, 1);
+              const rulerLeft = Math.round(maxDim * 0.095);
+              const rulerBottom = Math.round(maxDim * 0.072);
+              const rulerPadTop = Math.round(maxDim * 0.032);
+              const rulerPadRight = Math.round(maxDim * 0.035);
+              const totalW = rulerLeft + width + rulerPadRight;
+              const totalH = rulerPadTop + height + rulerBottom;
+              const rulerFont = Math.max(14, Math.round(maxDim * 0.022));
+              const tickLen = Math.max(8, Math.round(maxDim * 0.014));
+              const xTicks = buildTicks(width, pickRulerStep(width));
+              const yTicks = buildTicks(height, pickRulerStep(height));
+              const fontSize = Math.max(Math.min(width, height) * 0.028, 18);
+              const gridStep = Math.max(100, Math.round(width / 12 / 50) * 50);
+              const usedMaxY = sheet.usedHeightMm;
+              const usedMaxX = sheet.usedWidthMm;
+              const freeBottomY = Math.max(0, height - usedMaxY);
+
               return (
                 <figure key={sheet.index} className={isPortrait ? "portrait" : "landscape"}>
                   <figcaption>
-                    <span>
-                      {mode === "chapa" ? `Chapa ${sheet.index}` : `Bobina · ${decimal.format(sheet.heightMm / 1000)} m`}
-                      {" "}({sheet.placements.length} peças)
-                    </span>
-                    <b>{decimal.format(sheet.utilizationPercent)}% útil</b>
+                    <div>
+                      <span>
+                        {mode === "chapa" ? `Chapa ${sheet.index}` : `Bobina · ${decimal.format(height / 1000)} m`}
+                      </span>
+                      <b>
+                        {decimal.format(width / 10)} × {decimal.format(height / 10)} cm · {sheet.placements.length} peça(s) · {decimal.format(sheet.utilizationPercent)}% útil
+                      </b>
+                      {usedMaxY > 0 && (
+                        <em className="cut-plan-usage-pill">
+                          Ocupado: {decimal.format(usedMaxX / 10)} × {decimal.format(usedMaxY / 10)} cm
+                          {mode === "chapa" && freeBottomY >= 50
+                            ? ` · Sobra livre: ${decimal.format(width / 10)} × ${decimal.format(freeBottomY / 10)} cm`
+                            : ""}
+                        </em>
+                      )}
+                    </div>
+                    {result.sheets.length > 1 && (
+                      <div className="cut-plan-sheet-actions no-print">
+                        <button type="button" onClick={() => downloadDxf(sheet.index)}><Download />DXF</button>
+                        <button type="button" onClick={() => downloadSvg(sheet)}><FileCode2 />SVG</button>
+                      </div>
+                    )}
                   </figcaption>
                   <div className="cut-plan-sheet-frame">
                     <svg
-                      viewBox={`0 0 ${sheet.widthMm} ${sheet.heightMm}`}
+                      viewBox={`0 0 ${totalW} ${totalH}`}
                       preserveAspectRatio="xMidYMid meet"
-                      style={{ aspectRatio: `${sheet.widthMm} / ${Math.max(sheet.heightMm, 1)}` }}
+                      style={{ aspectRatio: `${totalW} / ${totalH}` }}
                       role="img"
                       aria-label={`Mapa de corte ${sheet.index}`}
                     >
@@ -431,58 +522,119 @@ export function QuickRectNesting({
                           <path d={`M ${gridStep} 0 L 0 0 0 ${gridStep}`} fill="none" stroke="#e3ecee" strokeWidth="2" vectorEffect="non-scaling-stroke" />
                         </pattern>
                       </defs>
-                      <rect width={sheet.widthMm} height={sheet.heightMm} fill="#ffffff" />
-                      <rect width={sheet.widthMm} height={sheet.heightMm} fill={`url(#rect-grid-${sheet.index})`} />
-                      {Number(marginMm) > 0 && (
-                        <rect
-                          x={Number(marginMm)}
-                          y={Number(marginMm)}
-                          width={Math.max(0, sheet.widthMm - Number(marginMm) * 2)}
-                          height={Math.max(0, sheet.heightMm - Number(marginMm) * 2)}
-                          fill="none"
-                          stroke="#e69e60"
-                          strokeWidth="1.2"
-                          strokeDasharray="6 4"
-                          vectorEffect="non-scaling-stroke"
-                        />
-                      )}
-                      {sheet.placements.map((item, idx) => {
-                        const palette = pieceColors[item.colorIndex % pieceColors.length];
-                        const showText = item.width >= sheet.widthMm * 0.08 && item.height >= Math.min(sheet.widthMm, sheet.heightMm) * 0.06;
-                        const labelFont = Math.min(fontSize, item.width * 0.22, item.height * 0.34);
-                        return (
-                          <g key={`${item.pieceId}-${idx}`}>
-                            <rect
-                              x={item.x}
-                              y={item.y}
-                              width={item.width}
-                              height={item.height}
-                              fill={palette.fill}
-                              stroke={palette.stroke}
-                              strokeWidth="1.5"
-                              vectorEffect="non-scaling-stroke"
-                            />
-                            {showText && (
-                              <text
-                                x={item.x + item.width / 2}
-                                y={item.y + item.height / 2 + labelFont * 0.35}
-                                textAnchor="middle"
-                                fill={palette.text}
-                                fontSize={labelFont}
-                                fontWeight="800"
-                              >
-                                {`${Number((item.origWidth / 10).toFixed(1))}×${Number((item.origHeight / 10).toFixed(1))}${item.rotated ? " ↻" : ""}`}
+
+                      {/* Régua esquerda (comprimento em cm, origem 0 no topo seguindo as camadas) */}
+                      <g className="cut-ruler">
+                        <line x1={rulerLeft - tickLen * 0.4} y1={rulerPadTop} x2={rulerLeft - tickLen * 0.4} y2={rulerPadTop + height} />
+                        {yTicks.map((mm) => {
+                          const yPos = rulerPadTop + mm;
+                          return (
+                            <g key={`ry-${mm}`}>
+                              <line x1={rulerLeft - tickLen * 1.4} y1={yPos} x2={rulerLeft - tickLen * 0.4} y2={yPos} />
+                              <text x={rulerLeft - tickLen * 1.8} y={yPos} textAnchor="end" dominantBaseline="middle" fontSize={rulerFont}>
+                                {decimal.format(mm / 10)}
                               </text>
-                            )}
+                            </g>
+                          );
+                        })}
+                        {/* Régua inferior (largura em cm) */}
+                        <line x1={rulerLeft} y1={rulerPadTop + height + tickLen * 0.4} x2={rulerLeft + width} y2={rulerPadTop + height + tickLen * 0.4} />
+                        {xTicks.map((mm) => {
+                          const xPos = rulerLeft + mm;
+                          return (
+                            <g key={`rx-${mm}`}>
+                              <line x1={xPos} y1={rulerPadTop + height + tickLen * 0.4} x2={xPos} y2={rulerPadTop + height + tickLen * 1.4} />
+                              <text x={xPos} y={rulerPadTop + height + tickLen * 1.8 + rulerFont * 0.78} textAnchor="middle" fontSize={rulerFont}>
+                                {decimal.format(mm / 10)}
+                              </text>
+                            </g>
+                          );
+                        })}
+                        <text x={rulerLeft - tickLen * 1.6} y={rulerPadTop + height + tickLen * 1.8 + rulerFont * 0.78} textAnchor="end" fontSize={Math.round(rulerFont * 0.9)} className="cut-ruler-unit">
+                          cm
+                        </text>
+                      </g>
+
+                      {/* Área da chapa / bobina */}
+                      <g transform={`translate(${rulerLeft} ${rulerPadTop})`}>
+                        <rect width={width} height={height} fill="#ffffff" stroke="#5b7f7c" strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
+                        <rect width={width} height={height} fill={`url(#rect-grid-${sheet.index})`} />
+                        {Number(marginMm) > 0 && (
+                          <rect
+                            x={Number(marginMm)}
+                            y={Number(marginMm)}
+                            width={Math.max(0, width - Number(marginMm) * 2)}
+                            height={Math.max(0, height - Number(marginMm) * 2)}
+                            fill="none"
+                            stroke="#e69e60"
+                            strokeWidth="1.2"
+                            strokeDasharray="6 4"
+                            vectorEffect="non-scaling-stroke"
+                          />
+                        )}
+
+                        {sheet.placements.map((item, idx) => {
+                          const palette = pieceColors[item.colorIndex % pieceColors.length];
+                          const showText = item.width >= width * 0.08 && item.height >= Math.min(width, height) * 0.045;
+                          const labelFont = Math.min(fontSize, item.width * 0.22, item.height * 0.42);
+                          return (
+                            <g key={`${item.pieceId}-${idx}`}>
+                              <rect
+                                x={item.x}
+                                y={item.y}
+                                width={item.width}
+                                height={item.height}
+                                fill={palette.fill}
+                                stroke={palette.stroke}
+                                strokeWidth="1.5"
+                                vectorEffect="non-scaling-stroke"
+                              >
+                                <title>{`${item.label} (${decimal.format(item.origWidth / 10)} × ${decimal.format(item.origHeight / 10)} cm${item.rotated ? " · girada 90°" : ""})`}</title>
+                              </rect>
+                              {showText && (
+                                <text
+                                  x={item.x + item.width / 2}
+                                  y={item.y + item.height / 2 + labelFont * 0.35}
+                                  textAnchor="middle"
+                                  fill={palette.text}
+                                  fontSize={labelFont}
+                                  fontWeight="800"
+                                >
+                                  {`${Number((item.origWidth / 10).toFixed(1))}×${Number((item.origHeight / 10).toFixed(1))}${item.rotated ? " ↻" : ""}`}
+                                </text>
+                              )}
+                            </g>
+                          );
+                        })}
+
+                        {/* Linha guia de altura realmente ocupada (corte reto de sobra) */}
+                        {mode === "chapa" && usedMaxY > 0 && usedMaxY < height - 15 && (
+                          <g className="cut-used-guide">
+                            <line
+                              x1={0}
+                              y1={usedMaxY}
+                              x2={width}
+                              y2={usedMaxY}
+                              strokeDasharray={`${Math.max(12, maxDim * 0.012)} ${Math.max(8, maxDim * 0.008)}`}
+                            />
+                            <text
+                              x={width - Math.max(14, maxDim * 0.012)}
+                              y={Math.min(height - Math.max(12, rulerFont * 0.6), usedMaxY + rulerFont * 1.15)}
+                              textAnchor="end"
+                              fontSize={rulerFont}
+                            >
+                              Usado: {decimal.format(usedMaxY / 10)} cm · Sobra: {decimal.format(freeBottomY / 10)} cm
+                            </text>
                           </g>
-                        );
-                      })}
+                        )}
+                      </g>
                     </svg>
                   </div>
                   <div className="cut-plan-sheet-legend">
                     <span>
-                      Dimensão: {decimal.format(sheet.widthMm / 10)} × {decimal.format(sheet.heightMm / 10)} cm
+                      Dimensão: {decimal.format(width / 10)} × {decimal.format(height / 10)} cm
                     </span>
+                    <span>Régua em cm · Camadas horizontais</span>
                     <span>Margem {marginMm || 0} mm · Espaço {spacingMm || 0} mm</span>
                   </div>
                 </figure>
