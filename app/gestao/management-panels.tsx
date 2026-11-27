@@ -712,6 +712,7 @@ function LegacyProductionOrderDialog({ order, staff, advancedControl, onClose, o
 }
 
 function ProductionOrderDialog({ order, staff, advancedControl, scheduleColumnsReady = true, initialFinalize = false, onClose, onUpdate, onRefresh, onWhatsApp }: { order: ProductionOrder; staff: ProductionStaff[]; advancedControl: boolean; scheduleColumnsReady?: boolean; initialFinalize?: boolean; onClose: () => void; onUpdate: (id: string, changes: ProductionChanges, success?: string) => Promise<ProductionUpdateResult>; onRefresh: () => Promise<void>; onWhatsApp: () => void }) {
+  const { notify } = useToast();
   const initialDeliveryMode = inferDeliveryMode(order);
   const [stage, setStage] = useState(order.stage);
   const [priority, setPriority] = useState(order.priority);
@@ -777,23 +778,46 @@ function ProductionOrderDialog({ order, staff, advancedControl, scheduleColumnsR
       payload.siteNotes = siteNotes.trim() || null;
     }
     const response = await onUpdate(order.id, payload, "Ordem de serviço atualizada.");
-    setOperationMessage(response.ok ? "OK:Alterações da ordem de serviço salvas." : response.error ?? "Não foi possível salvar a ordem.");
     setSaving(false);
+    if (response.ok) {
+      const savedText = stage === "concluido"
+        ? `OS-${order.number} concluída e salva com sucesso!`
+        : `Alterações da OS-${order.number} salvas com sucesso!`;
+      notify(savedText, "success");
+      onClose();
+    } else {
+      const errText = response.error ?? "Não foi possível salvar a ordem.";
+      setOperationMessage(errText);
+      notify(errText, "error");
+    }
   }
 
   async function finalizeOrder() {
     if (allowNegativeStock && stockOverrideReason.trim().length < 5) {
-      setOperationMessage("Informe por que o saldo ainda não está correto antes de usar a baixa excepcional.");
+      const reasonErr = "Informe por que o saldo ainda não está correto antes de usar a baixa excepcional.";
+      setOperationMessage(reasonErr);
+      notify(reasonErr, "error");
       return;
     }
     setFinalizing(true);
     setOperationMessage("");
     const response = await onUpdate(order.id, { stage: "concluido", allowNegativeStock, stockOverrideReason: allowNegativeStock ? stockOverrideReason.trim() : null }, "Produção finalizada.");
-    if (response.ok) {
-      setFinalizeOpen(false);
-      setOperationMessage(response.negativeStockAllowed ? "OK:OS finalizada com saldo negativo registrado. Faça o acerto físico do estoque assim que possível." : response.stockDeducted ? "OK:OS finalizada e materiais baixados do estoque." : "OK:OS finalizada. Nenhum consumo adicional precisava ser baixado.");
-    } else setOperationMessage(response.error ?? "Não foi possível finalizar a OS.");
     setFinalizing(false);
+    if (response.ok) {
+      setStage("concluido");
+      setFinalizeOpen(false);
+      const doneText = response.negativeStockAllowed
+        ? `OS-${order.number} finalizada com saldo negativo registrado.`
+        : response.stockDeducted
+          ? `OS-${order.number} finalizada e materiais baixados do estoque!`
+          : `OS-${order.number} finalizada e movida para Concluído!`;
+      notify(doneText, "success");
+      onClose();
+    } else {
+      const errText = response.error ?? "Não foi possível finalizar a OS.";
+      setOperationMessage(errText);
+      notify(errText, "error");
+    }
   }
 
   async function addActualEntry(event: FormEvent<HTMLFormElement>) {
@@ -836,9 +860,13 @@ function ProductionOrderDialog({ order, staff, advancedControl, scheduleColumnsR
     const response = await onUpdate(order.id, { stage: targetStage }, `OS-${order.number} avançada para ${kanbanShortLabel[targetStage] ?? targetStage}.`);
     if (response.ok) {
       setStage(targetStage);
-      setOperationMessage(`OK:Etapa atualizada para ${kanbanShortLabel[targetStage] ?? targetStage}.`);
+      const okMsg = `Etapa da OS-${order.number} atualizada para ${kanbanShortLabel[targetStage] ?? targetStage}.`;
+      setOperationMessage(`OK:${okMsg}`);
+      notify(okMsg, "success");
     } else {
-      setOperationMessage(response.error ?? "Não foi possível atualizar a etapa.");
+      const errMsg = response.error ?? "Não foi possível atualizar a etapa.";
+      setOperationMessage(errMsg);
+      notify(errMsg, "error");
     }
     setSaving(false);
   }
@@ -957,7 +985,9 @@ function ProductionOrderDialog({ order, staff, advancedControl, scheduleColumnsR
           <label className="span-2">Instruções de campo / acesso<Input value={siteNotes} onChange={(event) => setSiteNotes(event.target.value)} placeholder="Ex.: levar escada 6m, falar com João na portaria, 220V disponível..."/></label>
         </div>
       </div>
-      <label>Instruções da produção<textarea rows={4} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Acabamento, conferência, instalação e observações da execução"/></label><footer><Button type="button" variant="outline" onClick={onWhatsApp}><MessageCircle/>Avisar cliente</Button><Button type="button" variant="outline" onClick={() => setLabelsOpen(true)}><Tag/>Etiquetas de volume</Button><Button type="button" variant="outline" onClick={() => window.print()}><Printer/>Imprimir / salvar PDF</Button><Button type="submit" disabled={saving || finalizing}>{saving ? <RefreshCw className="spin"/> : <Check/>}{saving ? "Salvando..." : "Salvar alterações"}</Button>{order.stage !== "concluido" && <Button type="button" disabled={saving || finalizing} onClick={() => { setOperationMessage(""); setAllowNegativeStock(false); setStockOverrideReason(""); setFinalizeOpen(true); }}><CheckCircle2/>Finalizar OS</Button>}</footer></form>
+      <label>Instruções da produção<textarea rows={4} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Acabamento, conferência, instalação e observações da execução"/></label>
+      {operationMessage && <Feedback message={operationMessage}/>}
+      <footer><Button type="button" variant="outline" onClick={onWhatsApp}><MessageCircle/>Avisar cliente</Button><Button type="button" variant="outline" onClick={() => setLabelsOpen(true)}><Tag/>Etiquetas de volume</Button><Button type="button" variant="outline" onClick={() => window.print()}><Printer/>Imprimir / salvar PDF</Button><Button type="submit" disabled={saving || finalizing}>{saving ? <RefreshCw className="spin"/> : <Check/>}{saving ? "Salvando..." : "Salvar alterações"}</Button>{order.stage !== "concluido" && <Button type="button" disabled={saving || finalizing} onClick={() => { setOperationMessage(""); setAllowNegativeStock(false); setStockOverrideReason(""); setFinalizeOpen(true); }}><CheckCircle2/>Finalizar OS</Button>}</footer></form>
       {labelsOpen && <OsShippingLabelsDialog order={order} onClose={() => setLabelsOpen(false)}/>}
       {finalizeOpen && <div className="production-finalize-backdrop no-print" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !finalizing) setFinalizeOpen(false); }}><section className="production-finalize-card" role="alertdialog" aria-modal="true" aria-labelledby="production-finalize-title"><span className="production-finalize-icon"><CheckCircle2/></span><div><small>CONCLUSÃO DA PRODUÇÃO</small><h2 id="production-finalize-title">Finalizar a OS-{order.number}?</h2><p>A ordem será concluída e o sistema baixará somente o consumo calculado dos materiais selecionados na proposta.</p>{reservations.length > 0 && <div className="production-finalize-summary"><b>{reservations.length} insumo(s) vinculado(s)</b><span>{reservations.some((item) => item.status === "insuficiente") ? "Existe saldo insuficiente. Corrija o estoque ou autorize abaixo uma baixa excepcional, que ficará registrada para conferência." : "Os saldos serão conferidos novamente antes da baixa."}</span></div>}<label className={`production-stock-override ${allowNegativeStock ? "active" : ""}`}><input type="checkbox" checked={allowNegativeStock} disabled={finalizing} onChange={(event) => { setAllowNegativeStock(event.target.checked); setOperationMessage(""); }}/><span><b>Permitir saldo negativo se faltar material</b><small>Use apenas quando o material foi realmente consumido, mas a entrada ou o saldo ainda não foi lançado. A movimentação continuará registrada.</small></span></label>{allowNegativeStock && <label className="production-stock-reason"><span>Motivo da baixa excepcional</span><textarea rows={2} value={stockOverrideReason} disabled={finalizing} onChange={(event) => setStockOverrideReason(event.target.value)} placeholder="Ex.: compra recebida e ainda não lançada no estoque"/></label>}<Feedback message={operationMessage}/></div><footer><Button type="button" variant="outline" disabled={finalizing} onClick={() => setFinalizeOpen(false)}>Continuar na OS</Button><Button type="button" disabled={finalizing} onClick={() => void finalizeOrder()}>{finalizing ? <RefreshCw className="spin"/> : <CheckCircle2/>}{finalizing ? "Conferindo e finalizando..." : "Finalizar e registrar baixa"}</Button></footer></section></div>}
       <footer className="production-order-signatures"><span>Responsável pela produção</span><span>Conferência / entrega</span></footer>
